@@ -28,7 +28,7 @@ private:
 		float LOD0;
 		float LOD1;
 		float LOD2;
-		float __pad1;
+		UINT particleCount;
 
 		CB_SETBINDSLOT(CBSLOT_OTHER_HAIRPARTICLE)
 
@@ -39,7 +39,8 @@ private:
 	static wiGraphicsTypes::PixelShader *ps[SHADERTYPE_COUNT], *qps[SHADERTYPE_COUNT];
 	static wiGraphicsTypes::GeometryShader *gs,*qgs;
 	static wiGraphicsTypes::ComputeShader *cs_RESET;
-	static wiGraphicsTypes::ComputeShader *cs_CULLING;
+	static wiGraphicsTypes::ComputeShader *cs_CULLING_COARSE;
+	static wiGraphicsTypes::ComputeShader *cs_CULLING_TILED;
 	static wiGraphicsTypes::DepthStencilState *dss;
 	static wiGraphicsTypes::RasterizerState *rs,*ncrs;
 	static wiGraphicsTypes::BlendState *bs;

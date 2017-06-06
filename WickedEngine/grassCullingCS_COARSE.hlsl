@@ -9,7 +9,7 @@ RWRAWBUFFER(argumentBuffer, 0); // indirect draw args
 RWRAWBUFFER(indexBuffer, 1);
 
 
-[numthreads(GRASS_CULLING_THREADCOUNT, 1, 1)]
+[numthreads(GRASS_CULLING_THREADCOUNT_COARSE, 1, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {
 	const uint fetchAddress = DTid.x * vertexBuffer_stride;

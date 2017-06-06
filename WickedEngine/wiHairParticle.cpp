@@ -17,7 +17,8 @@ VertexShader *wiHairParticle::vs = nullptr;
 PixelShader *wiHairParticle::ps[],*wiHairParticle::qps[];
 GeometryShader *wiHairParticle::gs = nullptr,*wiHairParticle::qgs = nullptr;
 ComputeShader *wiHairParticle::cs_RESET = nullptr;
-ComputeShader *wiHairParticle::cs_CULLING = nullptr;
+ComputeShader *wiHairParticle::cs_CULLING_COARSE = nullptr;
+ComputeShader *wiHairParticle::cs_CULLING_TILED = nullptr;
 DepthStencilState *wiHairParticle::dss = nullptr;
 RasterizerState *wiHairParticle::rs = nullptr, *wiHairParticle::ncrs = nullptr;
 BlendState *wiHairParticle::bs = nullptr;
@@ -89,7 +90,8 @@ void wiHairParticle::CleanUpStatic()
 	SAFE_DELETE(gs);
 	SAFE_DELETE(qgs);
 	SAFE_DELETE(cs_RESET);
-	SAFE_DELETE(cs_CULLING);
+	SAFE_DELETE(cs_CULLING_COARSE);
+	SAFE_DELETE(cs_CULLING_TILED);
 	SAFE_DELETE(dss);
 	SAFE_DELETE(rs);
 	SAFE_DELETE(ncrs);
@@ -130,8 +132,9 @@ void wiHairParticle::LoadShaders()
 	gs = static_cast<GeometryShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassGS.cso", wiResourceManager::GEOMETRYSHADER));
 	qgs = static_cast<GeometryShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "qgrassGS.cso", wiResourceManager::GEOMETRYSHADER));
 
-	cs_RESET = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassCulling_RESETCS.cso", wiResourceManager::COMPUTESHADER));
-	cs_CULLING = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassCullingCS.cso", wiResourceManager::COMPUTESHADER));
+	cs_RESET = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassCullingCS_RESET.cso", wiResourceManager::COMPUTESHADER));
+	cs_CULLING_COARSE = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassCullingCS_COARSE.cso", wiResourceManager::COMPUTESHADER));
+	cs_CULLING_TILED = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "grassCullingCS_TILED.cso", wiResourceManager::COMPUTESHADER));
 
 }
 void wiHairParticle::SetUpStatic()
@@ -427,6 +430,7 @@ void wiHairParticle::ComputeCulling(Camera* camera, GRAPHICSTHREAD threadID)
 	gcb.LOD0 = (float)LOD[0];
 	gcb.LOD1 = (float)LOD[1];
 	gcb.LOD2 = (float)LOD[2];
+	gcb.particleCount = (UINT)points.size();
 
 	device->UpdateBuffer(cb, &gcb, threadID);
 	device->BindConstantBufferCS(cb, CB_GETBINDSLOT(ConstantBuffer), threadID);
@@ -443,9 +447,22 @@ void wiHairParticle::ComputeCulling(Camera* camera, GRAPHICSTHREAD threadID)
 	device->BindCS(cs_RESET, threadID);
 	device->Dispatch(1, 1, 1, threadID);
 
-	// Then compute culling:
-	device->BindCS(cs_CULLING, threadID);
-	device->Dispatch((UINT)ceilf((float)points.size() / GRASS_CULLING_THREADCOUNT), 1, 1, threadID);
+	// Then compute culling for whole frustum (coarse step):
+	device->BindCS(cs_CULLING_COARSE, threadID);
+	device->Dispatch((UINT)ceilf((float)gcb.particleCount / GRASS_CULLING_THREADCOUNT_COARSE), 1, 1, threadID);
+
+	// Clear the drawarg buffer again:
+	device->BindCS(cs_RESET, threadID);
+	device->Dispatch(1, 1, 1, threadID);
+
+	// Then compute culling per tiles + sort (tiled step):
+	device->BindCS(cs_CULLING_TILED, threadID);
+	device->Dispatch(
+		(UINT)ceilf((float)wiRenderer::GetInternalResolution().x / GRASS_CULLING_THREADCOUNT_TILED), 
+		(UINT)ceilf((float)wiRenderer::GetInternalResolution().y / GRASS_CULLING_THREADCOUNT_TILED), 
+		1, 
+		threadID
+	);
 
 	// Then reset state:
 	device->BindCS(nullptr, threadID);

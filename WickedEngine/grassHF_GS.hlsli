@@ -13,7 +13,7 @@ CBUFFER(HairParticleCB, CBSLOT_OTHER_HAIRPARTICLE)
 	float LOD0;
 	float LOD1;
 	float LOD2;
-	float __pad1;
+	uint xParticleCount;
 }
 
 

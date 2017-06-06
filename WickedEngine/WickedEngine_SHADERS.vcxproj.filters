@@ -597,13 +597,16 @@
     <FxCompile Include="skinningCS.hlsl">
       <Filter>CS</Filter>
     </FxCompile>
-    <FxCompile Include="grassCullingCS.hlsl">
-      <Filter>CS</Filter>
-    </FxCompile>
-    <FxCompile Include="grassCulling_ResetCS.hlsl">
-      <Filter>CS</Filter>
-    </FxCompile>
     <FxCompile Include="lightCullingCS_RESET.hlsl">
+      <Filter>CS</Filter>
+    </FxCompile>
+    <FxCompile Include="grassCullingCS_TILED.hlsl">
+      <Filter>CS</Filter>
+    </FxCompile>
+    <FxCompile Include="grassCullingCS_RESET.hlsl">
+      <Filter>CS</Filter>
+    </FxCompile>
+    <FxCompile Include="grassCullingCS_COARSE.hlsl">
       <Filter>CS</Filter>
     </FxCompile>
   </ItemGroup>

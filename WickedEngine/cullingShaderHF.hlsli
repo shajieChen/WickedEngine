@@ -121,6 +121,26 @@ bool PointInsidePlane(float3 p, Plane plane)
 {
 	return dot(plane.N, p) - plane.d < 0;
 }
+bool PointInsideFrustum(float3 p, Frustum frustum, float zNear, float zFar) // view space!
+{
+	bool result = true;
+
+	if (p.z < zNear || p.z > zFar)
+	{
+		result = false;
+	}
+
+	// Then check frustum planes
+	for (int i = 0; i < 4 && result; i++)
+	{
+		if (PointInsidePlane(p, frustum.planes[i]))
+		{
+			result = false;
+		}
+	}
+
+	return result;
+}
 
 struct Cone
 {
