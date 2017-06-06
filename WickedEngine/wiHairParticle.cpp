@@ -447,15 +447,11 @@ void wiHairParticle::ComputeCulling(Camera* camera, GRAPHICSTHREAD threadID)
 	device->BindCS(cs_RESET, threadID);
 	device->Dispatch(1, 1, 1, threadID);
 
-	// Then compute culling for whole frustum (coarse step):
-	device->BindCS(cs_CULLING_COARSE, threadID);
-	device->Dispatch((UINT)ceilf((float)gcb.particleCount / GRASS_CULLING_THREADCOUNT_COARSE), 1, 1, threadID);
+	//// Cull particles for the whole frustum:
+	//device->BindCS(cs_CULLING_COARSE, threadID);
+	//device->Dispatch((UINT)ceilf((float)gcb.particleCount / GRASS_CULLING_THREADCOUNT_COARSE), 1, 1, threadID);
 
-	// Clear the drawarg buffer again:
-	device->BindCS(cs_RESET, threadID);
-	device->Dispatch(1, 1, 1, threadID);
-
-	// Then compute culling per tiles + sort (tiled step):
+	// Cull particles per tile:
 	device->BindCS(cs_CULLING_TILED, threadID);
 	device->Dispatch(
 		(UINT)ceilf((float)wiRenderer::GetInternalResolution().x / GRASS_CULLING_THREADCOUNT_TILED), 
