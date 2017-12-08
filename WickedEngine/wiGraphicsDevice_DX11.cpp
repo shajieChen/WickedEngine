@@ -3471,11 +3471,16 @@ HRESULT GraphicsDevice_DX11::CreateTextureFromFile(const std::string& fileName, 
 	else
 	{
 		// Load WIC
-		if (mipMaps && threadID == GRAPHICSTHREAD_IMMEDIATE)
+		if (mipMaps)
+		{
 			LOCK();
-		hr = CreateWICTextureFromFile(mipMaps, device, deviceContexts[threadID], wstring(fileName.begin(), fileName.end()).c_str(), (ID3D11Resource**)&(*ppTexture)->texture2D_DX11, &(*ppTexture)->SRV_DX11);
-		if (mipMaps && threadID == GRAPHICSTHREAD_IMMEDIATE)
+			hr = CreateWICTextureFromFile(device, deviceContexts[threadID], wstring(fileName.begin(), fileName.end()).c_str(), (ID3D11Resource**)&(*ppTexture)->texture2D_DX11, &(*ppTexture)->SRV_DX11);
 			UNLOCK();
+		}
+		else
+		{
+			hr = CreateWICTextureFromFile(device, wstring(fileName.begin(), fileName.end()).c_str(), (ID3D11Resource**)&(*ppTexture)->texture2D_DX11, &(*ppTexture)->SRV_DX11);
+		}
 	}
 
 	if (FAILED(hr)) {
