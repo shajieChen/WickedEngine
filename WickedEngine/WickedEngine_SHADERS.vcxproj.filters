@@ -118,6 +118,9 @@
     <None Include="oceanSurfaceHF.hlsli">
       <Filter>HF</Filter>
     </None>
+    <None Include="atmosphereHF.hlsli">
+      <Filter>HF</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="objectHS.hlsl">
@@ -674,6 +677,12 @@
     </FxCompile>
     <FxCompile Include="oceanSurfacePS.hlsl">
       <Filter>PS</Filter>
+    </FxCompile>
+    <FxCompile Include="atmosphere_precompute_skyboxCS.hlsl">
+      <Filter>CS</Filter>
+    </FxCompile>
+    <FxCompile Include="atmosphere_precompute_inscatteringCS.hlsl">
+      <Filter>CS</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
