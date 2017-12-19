@@ -1465,6 +1465,8 @@ void wiRenderer::LoadShaders()
 		computeShaders[CSTYPE_GENERATEMIPCHAIN3D_SIMPLEFILTER] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "generateMIPChain3D_SimpleFilterCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_GENERATEMIPCHAIN3D_GAUSSIAN] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "generateMIPChain3D_GaussianCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_SKINNING] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "skinningCS.cso", wiResourceManager::COMPUTESHADER));
+		computeShaders[CSTYPE_ATMOSPHERE_PRECOMPUTEINSCATTERING] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "atmosphere_precompute_inscatteringCS.cso", wiResourceManager::COMPUTESHADER));
+		computeShaders[CSTYPE_ATMOSPHERE_PRECOMPUTESKYBOX] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "atmosphere_precompute_skyboxCS.cso", wiResourceManager::COMPUTESHADER));
 
 
 		hullShaders[HSTYPE_OBJECT] = static_cast<HullShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "objectHS.cso", wiResourceManager::HULLSHADER));
@@ -5135,6 +5137,28 @@ void wiRenderer::DrawSky(GRAPHICSTHREAD threadID)
 		if (enviroMap == nullptr)
 			return;
 	}
+
+	const UINT dim = 16;
+	if (textures[TEXTYPE_3D_ATMOSPHERE_SKYBOXLUT] == nullptr)
+	{
+		Texture3DDesc desc;
+		desc.Width = dim;
+		desc.Height = dim;
+		desc.Depth = dim;
+		desc.BindFlags = BIND_UNORDERED_ACCESS;
+		desc.CPUAccessFlags = 0;
+		desc.MipLevels = 1;
+		desc.MiscFlags = 0;
+		desc.Usage = USAGE_DEFAULT;
+		desc.Format = FORMAT_R32G32B32A32_FLOAT;
+		GetDevice()->CreateTexture3D(&desc, nullptr, (Texture3D**)&textures[TEXTYPE_3D_ATMOSPHERE_SKYBOXLUT]);
+	}
+	GetDevice()->EventBegin("Atmoshpere - PrecomputeSky", threadID);
+	GetDevice()->BindComputePSO(CPSO[CSTYPE_ATMOSPHERE_PRECOMPUTESKYBOX], threadID);
+	GetDevice()->BindSampler(CS, samplers[SSLOT_LINEAR_CLAMP], 0, threadID);
+	GetDevice()->BindUnorderedAccessResourceCS(textures[TEXTYPE_3D_ATMOSPHERE_SKYBOXLUT], 0, threadID);
+	GetDevice()->Dispatch(dim, dim, dim, threadID);
+	GetDevice()->EventEnd(threadID);
 
 	GetDevice()->EventBegin("DrawSky", threadID);
 
