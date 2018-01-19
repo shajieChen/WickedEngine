@@ -1486,6 +1486,7 @@ void wiRenderer::LoadShaders()
 		computeShaders[CSTYPE_LUMINANCE_PASS1] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "luminancePass1CS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_LUMINANCE_PASS2] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "luminancePass2CS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_TILEFRUSTUMS] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "tileFrustumsCS.cso", wiResourceManager::COMPUTESHADER));
+		computeShaders[CSTYPE_TILEDDEFERRED] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "tiledDeferredCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_RESOLVEMSAADEPTHSTENCIL] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "resolveMSAADepthStencilCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_VOXELSCENECOPYCLEAR] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelSceneCopyClearCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_VOXELSCENECOPYCLEAR_TEMPORALSMOOTHING] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelSceneCopyClear_TemporalSmoothing.cso", wiResourceManager::COMPUTESHADER));
@@ -5813,6 +5814,8 @@ void wiRenderer::ComputeTiledLightCulling(bool deferred, GRAPHICSTHREAD threadID
 		device->CreateTexture2D(&desc, nullptr, (Texture2D**)&textures[TEXTYPE_2D_DEBUGUAV]);
 	}
 
+	static bool separateDeferred = false;
+
 	// Perform the culling
 	{
 		device->EventBegin("Entity Culling", threadID);
@@ -5821,7 +5824,7 @@ void wiRenderer::ComputeTiledLightCulling(bool deferred, GRAPHICSTHREAD threadID
 
 		device->BindResource(CS, frustumBuffer, SBSLOT_TILEFRUSTUMS, threadID);
 
-		device->BindComputePSO(CPSO_tiledlighting[deferred][GetAdvancedLightCulling()][GetDebugLightCulling()], threadID);
+		device->BindComputePSO(CPSO_tiledlighting[separateDeferred ? false : deferred][GetAdvancedLightCulling()][GetDebugLightCulling()], threadID);
 
 		if (GetDebugLightCulling())
 		{
@@ -5839,7 +5842,7 @@ void wiRenderer::ComputeTiledLightCulling(bool deferred, GRAPHICSTHREAD threadID
 		device->UpdateBuffer(constantBuffers[CBTYPE_DISPATCHPARAMS], &dispatchParams, threadID);
 		device->BindConstantBuffer(CS, constantBuffers[CBTYPE_DISPATCHPARAMS], CB_GETBINDSLOT(DispatchParamsCB), threadID);
 
-		if (deferred)
+		if (!separateDeferred && deferred)
 		{
 			GPUResource* uavs[] = {
 				textures[TEXTYPE_2D_TILEDDEFERRED_DIFFUSEUAV],
@@ -5864,6 +5867,25 @@ void wiRenderer::ComputeTiledLightCulling(bool deferred, GRAPHICSTHREAD threadID
 			device->BindUnorderedAccessResourcesCS(uavs, UAVSLOT_ENTITYINDEXLIST_OPAQUE, ARRAYSIZE(uavs), threadID);
 
 			device->Dispatch(dispatchParams.numThreadGroups[0], dispatchParams.numThreadGroups[1], dispatchParams.numThreadGroups[2], threadID);
+			device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
+		}
+
+		if (separateDeferred && deferred)
+		{
+			device->BindComputePSO(CPSO[CSTYPE_TILEDDEFERRED], threadID);
+
+			GPUResource* uavs[] = {
+				textures[TEXTYPE_2D_TILEDDEFERRED_DIFFUSEUAV],
+				textures[TEXTYPE_2D_TILEDDEFERRED_SPECULARUAV],
+			};
+			device->BindUnorderedAccessResourcesCS(uavs, 0, ARRAYSIZE(uavs), threadID);
+
+			GetDevice()->BindResource(CS, Light::shadowMapArray_2D, TEXSLOT_SHADOWARRAY_2D, threadID);
+			GetDevice()->BindResource(CS, Light::shadowMapArray_Cube, TEXSLOT_SHADOWARRAY_CUBE, threadID);
+			GetDevice()->BindResource(CS, Light::shadowMapArray_Transparent, TEXSLOT_SHADOWARRAY_TRANSPARENT, threadID);
+			GetDevice()->BindResource(CS, resourceBuffers[RBTYPE_ENTITYINDEXLIST_OPAQUE], SBSLOT_ENTITYINDEXLIST, threadID);
+
+			device->Dispatch((UINT)ceilf((float)_width / (float)TILED_RENDERING_BLOCKSIZE), (UINT)ceilf((float)_height / (float)TILED_RENDERING_BLOCKSIZE), 1, threadID);
 			device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
 		}
 
