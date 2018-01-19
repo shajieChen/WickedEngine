@@ -5814,6 +5814,9 @@ void wiRenderer::ComputeTiledLightCulling(bool deferred, GRAPHICSTHREAD threadID
 		device->CreateTexture2D(&desc, nullptr, (Texture2D**)&textures[TEXTYPE_2D_DEBUGUAV]);
 	}
 
+	// experimental
+	//  false means the culling shader does light evaluation at the end of shader, Nvidia seems to prefer this approach
+	//  true means that the light evaluation shader is separate from the culling shader, AMD hardware seems happier with it with different smaller tile size than culling shader
 	static bool separateDeferred = false;
 
 	// Perform the culling
