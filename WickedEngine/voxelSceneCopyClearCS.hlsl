@@ -11,7 +11,8 @@ void main( uint3 DTid : SV_DispatchThreadID )
 
 	const float4 color = DecodeColor(voxel.colorMask);
 
-	const uint3 writecoord = unflatten3D(DTid.x, g_xWorld_VoxelRadianceDataRes);
+	//const uint3 writecoord = unflatten3D(DTid.x, g_xWorld_VoxelRadianceDataRes);
+	const uint3 writecoord = unflatten3D(voxel.coordFlattened, g_xWorld_VoxelRadianceDataRes);
 
 	[branch]
 	if (color.a > 0)
@@ -39,6 +40,6 @@ void main( uint3 DTid : SV_DispatchThreadID )
 		output_emission[writecoord] = 0;
 	}
 
-	// delete emission data, but keep normals (no need to delete, we will only read normal values of filled voxels)
-	input_output[DTid.x].colorMask = 0;
+	//// delete emission data, but keep normals (no need to delete, we will only read normal values of filled voxels)
+	//input_output[DTid.x].colorMask = 0;
 }

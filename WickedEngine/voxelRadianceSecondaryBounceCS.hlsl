@@ -11,13 +11,17 @@ RWTEXTURE3D(output, float4, 0);
 [numthreads(1024, 1, 1)]
 void main( uint3 DTid : SV_DispatchThreadID )
 {
-	const uint3 writecoord = unflatten3D(DTid.x, g_xWorld_VoxelRadianceDataRes);
+	VoxelType voxel = input_voxelscene[DTid.x];
+
+	//const uint3 writecoord = unflatten3D(DTid.x, g_xWorld_VoxelRadianceDataRes);
+	const uint3 writecoord = unflatten3D(voxel.coordFlattened, g_xWorld_VoxelRadianceDataRes);
 
 	float4 emission = input_emission[writecoord];
 
 	if (emission.a > 0)
 	{
-		float3 N = DecodeNormal(input_voxelscene[DTid.x].normalMask);
+		//float3 N = DecodeNormal(input_voxelscene[DTid.x].normalMask);
+		float3 N = DecodeNormal(voxel.normalMask);
 
 		float3 uvw = ((float3)writecoord + 0.5f) / (float3)g_xWorld_VoxelRadianceDataRes;
 

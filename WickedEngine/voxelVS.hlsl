@@ -2,6 +2,8 @@
 #include "cube.hlsli"
 #include "voxelHF.hlsli"
 
+STRUCTUREDBUFFER(voxels, VoxelType, TEXSLOT_ONDEMAND0);
+
 struct VSOut
 {
 	float4 pos : SV_POSITION;
@@ -12,9 +14,11 @@ VSOut main( uint vertexID : SV_VERTEXID )
 {
 	VSOut o;
 
-	uint3 coord = unflatten3D(vertexID, g_xWorld_VoxelRadianceDataRes);
+	VoxelType voxel = voxels[vertexID];
+
+	uint3 coord = unflatten3D(voxel.coordFlattened, g_xWorld_VoxelRadianceDataRes);
 	o.pos = float4(coord, 1);
-	o.col = texture_voxelradiance[coord];
+	o.col = DecodeColor(voxel.colorMask);
 
 	//[branch]
 	//if (o.col.a > 0)

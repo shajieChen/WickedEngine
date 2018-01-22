@@ -656,6 +656,7 @@ void wiRenderer::LoadBuffers()
 	GetDevice()->CreateBuffer(&bd, nullptr, resourceBuffers[RBTYPE_MATRIXARRAY]);
 
 	SAFE_DELETE(resourceBuffers[RBTYPE_VOXELSCENE]); // lazy init on request
+	SAFE_DELETE(resourceBuffers[RBTYPE_VOXELSTATS]); // lazy init on request
 }
 
 enum OBJECTRENDERING_DOUBLESIDED
@@ -1491,6 +1492,7 @@ void wiRenderer::LoadShaders()
 		computeShaders[CSTYPE_VOXELSCENECOPYCLEAR_TEMPORALSMOOTHING] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelSceneCopyClear_TemporalSmoothing.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_VOXELRADIANCESECONDARYBOUNCE] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelRadianceSecondaryBounceCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_VOXELCLEARONLYNORMAL] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelClearOnlyNormalCS.cso", wiResourceManager::COMPUTESHADER));
+		computeShaders[CSTYPE_VOXELSTATSTRANSFORMSCLEAR] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "voxelStatsTransformClearCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_GENERATEMIPCHAIN2D_SIMPLEFILTER] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "generateMIPChain2D_SimpleFilterCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_GENERATEMIPCHAIN2D_GAUSSIAN] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "generateMIPChain2D_GaussianCS.cso", wiResourceManager::COMPUTESHADER));
 		computeShaders[CSTYPE_GENERATEMIPCHAIN3D_SIMPLEFILTER] = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(SHADERPATH + "generateMIPChain3D_SimpleFilterCS.cso", wiResourceManager::COMPUTESHADER));
@@ -4014,6 +4016,7 @@ void wiRenderer::DrawDebugVoxels(Camera* camera, GRAPHICSTHREAD threadID)
 
 		GetDevice()->BindGraphicsPSO(PSO_debug[DEBUGRENDERING_VOXEL], threadID);
 
+		GetDevice()->BindResource(VS, resourceBuffers[RBTYPE_VOXELSCENE], TEXSLOT_ONDEMAND0, threadID);
 
 		MiscCB sb;
 		sb.mTransform = XMMatrixTranspose(XMMatrixTranslationFromVector(XMLoadFloat3(&voxelSceneData.center)) * camera->GetViewProjection());
@@ -4021,7 +4024,8 @@ void wiRenderer::DrawDebugVoxels(Camera* camera, GRAPHICSTHREAD threadID)
 
 		GetDevice()->UpdateBuffer(constantBuffers[CBTYPE_MISC], &sb, threadID);
 
-		GetDevice()->Draw(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res, 0, threadID);
+		//GetDevice()->Draw(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res, 0, threadID);
+		GetDevice()->DrawInstancedIndirect(resourceBuffers[RBTYPE_VOXELSTATS], 4 * 4, threadID);
 
 		GetDevice()->EventEnd(threadID);
 	}
@@ -5563,7 +5567,7 @@ void wiRenderer::VoxelRadiance(GRAPHICSTHREAD threadID)
 	if (resourceBuffers[RBTYPE_VOXELSCENE] == nullptr)
 	{
 		GPUBufferDesc desc;
-		desc.StructureByteStride = sizeof(UINT) * 2;
+		desc.StructureByteStride = sizeof(UINT) * 3; // hold voxel type
 		desc.ByteWidth = desc.StructureByteStride * voxelSceneData.res * voxelSceneData.res * voxelSceneData.res;
 		desc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;
@@ -5572,6 +5576,19 @@ void wiRenderer::VoxelRadiance(GRAPHICSTHREAD threadID)
 
 		resourceBuffers[RBTYPE_VOXELSCENE] = new GPUBuffer;
 		HRESULT hr = GetDevice()->CreateBuffer(&desc, nullptr, resourceBuffers[RBTYPE_VOXELSCENE]);
+		assert(SUCCEEDED(hr));
+	}
+	if (resourceBuffers[RBTYPE_VOXELSTATS] == nullptr)
+	{
+		GPUBufferDesc desc;
+		desc.ByteWidth = sizeof(IndirectDispatchArgs) + sizeof(IndirectDrawArgsInstanced) + sizeof(UINT); // dispatch args + draw args + counter
+		desc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = RESOURCE_MISC_DRAWINDIRECT_ARGS | RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+		desc.Usage = USAGE_DEFAULT;
+
+		resourceBuffers[RBTYPE_VOXELSTATS] = new GPUBuffer;
+		HRESULT hr = GetDevice()->CreateBuffer(&desc, nullptr, resourceBuffers[RBTYPE_VOXELSTATS]);
 		assert(SUCCEEDED(hr));
 	}
 
@@ -5613,14 +5630,23 @@ void wiRenderer::VoxelRadiance(GRAPHICSTHREAD threadID)
 		VP.MaxDepth = 1.0f;
 		GetDevice()->BindViewports(1, &VP, threadID);
 
-		GPUResource* UAVs[] = { resourceBuffers[RBTYPE_VOXELSCENE] };
-		GetDevice()->BindRenderTargetsUAVs(0, nullptr, nullptr, UAVs, 0, 1, threadID);
+		GPUResource* UAVs[] = {
+			resourceBuffers[RBTYPE_VOXELSTATS],
+			resourceBuffers[RBTYPE_VOXELSCENE],
+		};
+		GetDevice()->BindRenderTargetsUAVs(0, nullptr, nullptr, UAVs, 0, ARRAYSIZE(UAVs), threadID);
 
 		RenderMeshes(center, culledRenderer, SHADERTYPE_VOXELIZE, RENDERTYPE_OPAQUE, threadID);
 
+		GetDevice()->BindRenderTargets(0, nullptr, nullptr, threadID);
+
+		// Transform voxel stats to iondirect args and clear:
+		GetDevice()->BindComputePSO(CPSO[CSTYPE_VOXELSTATSTRANSFORMSCLEAR], threadID);
+		GetDevice()->BindUnorderedAccessResourceCS(resourceBuffers[RBTYPE_VOXELSTATS], 0, threadID);
+		GetDevice()->Dispatch(1, 1, 1, threadID);
+
 		// Copy the packed voxel scene data to a 3D texture, then delete the voxel scene emission data. The cone tracing will operate on the 3D texture
 		GetDevice()->EventBegin("Voxel Scene Copy - Clear", threadID);
-		GetDevice()->BindRenderTargets(0, nullptr, nullptr, threadID);
 		GetDevice()->BindUnorderedAccessResourceCS(resourceBuffers[RBTYPE_VOXELSCENE], 0, threadID);
 		GetDevice()->BindUnorderedAccessResourceCS(textures[TEXTYPE_3D_VOXELRADIANCE], 1, threadID);
 
@@ -5632,7 +5658,8 @@ void wiRenderer::VoxelRadiance(GRAPHICSTHREAD threadID)
 		{
 			GetDevice()->BindComputePSO(CPSO[CSTYPE_VOXELSCENECOPYCLEAR], threadID);
 		}
-		GetDevice()->Dispatch((UINT)(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res / 1024), 1, 1, threadID);
+		//GetDevice()->Dispatch((UINT)(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res / 1024), 1, 1, threadID);
+		GetDevice()->DispatchIndirect(resourceBuffers[RBTYPE_VOXELSTATS], 0, threadID);
 		GetDevice()->EventEnd(threadID);
 
 		if (voxelSceneData.secondaryBounceEnabled)
@@ -5645,7 +5672,8 @@ void wiRenderer::VoxelRadiance(GRAPHICSTHREAD threadID)
 			GetDevice()->BindResource(CS, textures[TEXTYPE_3D_VOXELRADIANCE], 0, threadID);
 			GetDevice()->BindResource(CS, resourceBuffers[RBTYPE_VOXELSCENE], 1, threadID);
 			GetDevice()->BindComputePSO(CPSO[CSTYPE_VOXELRADIANCESECONDARYBOUNCE], threadID);
-			GetDevice()->Dispatch((UINT)(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res / 1024), 1, 1, threadID);
+			//GetDevice()->Dispatch((UINT)(voxelSceneData.res * voxelSceneData.res * voxelSceneData.res / 1024), 1, 1, threadID);
+			GetDevice()->DispatchIndirect(resourceBuffers[RBTYPE_VOXELSTATS], 0, threadID);
 			GetDevice()->EventEnd(threadID);
 
 			GetDevice()->EventBegin("Voxel Scene Clear Normals", threadID);

@@ -3,6 +3,7 @@
 
 struct VoxelType
 {
+	uint coordFlattened;
 	uint colorMask;
 	uint normalMask;
 };
