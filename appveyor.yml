@@ -10,7 +10,7 @@ build:
   parallel: true
   verbosity: minimal
 after_build:
-- cmd: 7z a WickedEngineEditor.zip @artifacts_editor.txt
+- cmd: 7z a WickedEngineEditor.zip %APPVEYOR_BUILD_FOLDER%\WickedEngine\shaders\ %APPVEYOR_BUILD_FOLDER%\WickedEngine\fonts\ %APPVEYOR_BUILD_FOLDER%\Editor\images\ %APPVEYOR_BUILD_FOLDER%\Editor\*.ini %APPVEYOR_BUILD_FOLDER%\Editor\*.ico %APPVEYOR_BUILD_FOLDER%\Editor\*.lua %APPVEYOR_BUILD_FOLDER%\logo\ %APPVEYOR_BUILD_FOLDER%\model\ %APPVEYOR_BUILD_FOLDER%\scripts\ %APPVEYOR_BUILD_FOLDER%\shadercompilers\ %APPVEYOR_BUILD_FOLDER%\Documentation\ %APPVEYOR_BUILD_FOLDER%\*.py %APPVEYOR_BUILD_FOLDER%\*.txt
 artifacts:
 - path: WickedEngineEditor.zip
   name: Editor
