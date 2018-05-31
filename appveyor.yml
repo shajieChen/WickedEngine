@@ -10,7 +10,8 @@ build:
   parallel: true
   verbosity: minimal
 after_build:
-- cmd: 7z a WickedEngineEditor.zip %APPVEYOR_BUILD_FOLDER%\WickedEngine\shaders\ %APPVEYOR_BUILD_FOLDER%\WickedEngine\fonts\ %APPVEYOR_BUILD_FOLDER%\Editor\images\ %APPVEYOR_BUILD_FOLDER%\Editor\*.ini %APPVEYOR_BUILD_FOLDER%\Editor\*.ico %APPVEYOR_BUILD_FOLDER%\Editor\*.lua %APPVEYOR_BUILD_FOLDER%\logo\ %APPVEYOR_BUILD_FOLDER%\model\ %APPVEYOR_BUILD_FOLDER%\scripts\ %APPVEYOR_BUILD_FOLDER%\shadercompilers\ %APPVEYOR_BUILD_FOLDER%\Documentation\ %APPVEYOR_BUILD_FOLDER%\*.py %APPVEYOR_BUILD_FOLDER%\*.txt
+- cmd: move %APPVEYOR_BUILD_FOLDER%\$(platform)\$(configuration)\Editor.exe %APPVEYOR_BUILD_FOLDER%\Editor
+- cmd: 7z a WickedEngineEditor.zip %APPVEYOR_BUILD_FOLDER%\WickedEngine\shaders\ %APPVEYOR_BUILD_FOLDER%\WickedEngine\fonts\ %APPVEYOR_BUILD_FOLDER%\Editor\images\ %APPVEYOR_BUILD_FOLDER%\Editor\*.ini\ %APPVEYOR_BUILD_FOLDER%\Editor\*.ico\ %APPVEYOR_BUILD_FOLDER%\Editor\*.lua\ %APPVEYOR_BUILD_FOLDER%\logo\ %APPVEYOR_BUILD_FOLDER%\models\ %APPVEYOR_BUILD_FOLDER%\scripts\ %APPVEYOR_BUILD_FOLDER%\shadercompilers\ %APPVEYOR_BUILD_FOLDER%\Documentation\ %APPVEYOR_BUILD_FOLDER%\*.py %APPVEYOR_BUILD_FOLDER%\*.txt %APPVEYOR_BUILD_FOLDER%\Editor\Editor.exe\
 artifacts:
 - path: WickedEngineEditor.zip
   name: Editor
