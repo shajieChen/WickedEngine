@@ -1,20 +1,42 @@
-version: 1.0.{build}
+version: '{build}'
+branches:
+  only:
+  - master
+  - appveyor-artifact
 image: Visual Studio 2017
 configuration: Release
 platform: x64
 build:
   parallel: true
   verbosity: minimal
-  
-after_build:
-  
 artifacts:
-  - path: x64/Release/Editor.exe
-    name: Executable
-  
-  - path: WickedEngine/shaders/*.cso
-    name: Compiled Shaders
-  
-  - path: WickedEngine/fonts/*
-    name: Fonts
-  
+- path: $(platform)/$(configuration)/Editor.exe
+  name: Executable
+- path: WickedEngine/shaders/*
+  name: CompiledShader
+- path: WickedEngine/fonts/*
+  name: Fonts
+- path: Editor/images/*
+  name: Editor assets
+- path: Editor/config.ini
+  name: Editor config
+- path: Editor/Editor.ico
+  name: Editor icon
+- path: Editor/small.ico
+  name: Editor icon small
+- path: Editor/startup.lua
+  name: Editor startup scipt
+- path: logo/*
+  name: Logos
+- path: model/*
+  name: Models
+- path: scripts/*
+  name: Scripts
+- path: shadercompilers/*
+  name: Shadercompilers
+- path: Documentation/*
+  name: Documentation
+- path: '*.py'
+  name: Python scripts
+- path: '*.txt'
+  name: Text files
