@@ -28,13 +28,13 @@ artifacts:
   name: Editor startup scipt
 - path: logo/*
   name: Logos
-- path: model/*
+- path: model/**
   name: Models
-- path: scripts/*
+- path: scripts/**
   name: Scripts
-- path: shadercompilers/*
+- path: shadercompilers/**
   name: Shadercompilers
-- path: Documentation/*
+- path: Documentation/**
   name: Documentation
 - path: '*.py'
   name: Python scripts
