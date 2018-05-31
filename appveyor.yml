@@ -12,3 +12,9 @@ artifacts:
   - path: x64/Release/Editor.exe
   - name: Executable
   
+  - path: WickedEngine/shaders/*.cso
+  - name: Compiled Shaders
+  
+  - path: WickedEngine/fonts/*
+  - name: Fonts
+  
