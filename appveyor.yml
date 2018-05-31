@@ -5,3 +5,10 @@ platform: x64
 build:
   parallel: true
   verbosity: minimal
+  
+after_build:
+  
+artifacts:
+  - path: x64/Release/Editor.exe
+  - name: Executable
+  
