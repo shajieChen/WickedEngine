@@ -10,11 +10,11 @@ after_build:
   
 artifacts:
   - path: x64/Release/Editor.exe
-  - name: Executable
+    name: Executable
   
   - path: WickedEngine/shaders/*.cso
-  - name: Compiled Shaders
+    name: Compiled Shaders
   
   - path: WickedEngine/fonts/*
-  - name: Fonts
+    name: Fonts
   
