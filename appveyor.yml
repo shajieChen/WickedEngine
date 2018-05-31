@@ -9,34 +9,8 @@ platform: x64
 build:
   parallel: true
   verbosity: minimal
+after_build:
+- cmd: 7z a WickedEngineEditor.zip @artifacts_editor.txt
 artifacts:
-- path: $(platform)/$(configuration)/Editor.exe
-  name: Executable
-- path: WickedEngine/shaders/*
-  name: CompiledShader
-- path: WickedEngine/fonts/*
-  name: Fonts
-- path: Editor/images/*
-  name: Editor assets
-- path: Editor/config.ini
-  name: Editor config
-- path: Editor/Editor.ico
-  name: Editor icon
-- path: Editor/small.ico
-  name: Editor icon small
-- path: Editor/startup.lua
-  name: Editor startup scipt
-- path: logo/*
-  name: Logos
-- path: model/**
-  name: Models
-- path: scripts/**
-  name: Scripts
-- path: shadercompilers/**
-  name: Shadercompilers
-- path: Documentation/**
-  name: Documentation
-- path: '*.py'
-  name: Python scripts
-- path: '*.txt'
-  name: Text files
+- path: WickedEngineEditor.zip
+  name: Editor
