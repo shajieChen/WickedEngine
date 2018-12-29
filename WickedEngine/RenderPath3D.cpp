@@ -121,15 +121,19 @@ void RenderPath3D::ResizeBuffers()
 		, false, defaultTextureFormat
 	);
 
-	rtBloom.resize(3);
-	rtBloom[0].Initialize(
-		wiRenderer::GetInternalResolution().x, wiRenderer::GetInternalResolution().y
-		, false, defaultTextureFormat, 0);
-	for (unsigned int i = 1; i<rtBloom.size(); ++i)
-		rtBloom[i].Initialize(
-			(UINT)(wiRenderer::GetInternalResolution().x / getBloomDownSample())
-			, (UINT)(wiRenderer::GetInternalResolution().y / getBloomDownSample())
-			, false, defaultTextureFormat);
+	rtBloom.resize(8);
+
+	rtBloom[0].Initialize(wiRenderer::GetInternalResolution().x / 4, wiRenderer::GetInternalResolution().y / 4, false, defaultTextureFormat);
+	rtBloom[1].Initialize(wiRenderer::GetInternalResolution().x / 4, wiRenderer::GetInternalResolution().y / 4, false, defaultTextureFormat);
+
+	rtBloom[2].Initialize(wiRenderer::GetInternalResolution().x / 8, wiRenderer::GetInternalResolution().y / 8, false, defaultTextureFormat);
+	rtBloom[3].Initialize(wiRenderer::GetInternalResolution().x / 8, wiRenderer::GetInternalResolution().y / 8, false, defaultTextureFormat);
+
+	rtBloom[4].Initialize(wiRenderer::GetInternalResolution().x / 16, wiRenderer::GetInternalResolution().y / 16, false, defaultTextureFormat);
+	rtBloom[5].Initialize(wiRenderer::GetInternalResolution().x / 16, wiRenderer::GetInternalResolution().y / 16, false, defaultTextureFormat);
+
+	rtBloom[6].Initialize(wiRenderer::GetInternalResolution().x / 32, wiRenderer::GetInternalResolution().y / 32, false, defaultTextureFormat);
+	rtBloom[7].Initialize(wiRenderer::GetInternalResolution().x / 32, wiRenderer::GetInternalResolution().y / 32, false, defaultTextureFormat);
 
 	rtTemporalAA[0].Initialize(
 		wiRenderer::GetInternalResolution().x, wiRenderer::GetInternalResolution().y
@@ -503,30 +507,54 @@ void RenderPath3D::RenderComposition(wiRenderTarget& shadedSceneRT, wiRenderTarg
 		wiRenderer::GetDevice()->EventBegin("Bloom", threadID);
 		fx.process.clear();
 		fx.disableFullScreen();
-		fx.quality = QUALITY_BILINEAR;
-		rtBloom[0].Set(threadID); // separate bright parts
+		fx.blendFlag = BLENDMODE_OPAQUE;
+		rtBloom[1].Set(threadID); // separate bright parts
 		{
 			fx.process.setBloom(getBloomThreshold(), getBloomSaturation());
-			fx.blendFlag = BLENDMODE_OPAQUE;
-			fx.sampleFlag = SAMPLEMODE_CLAMP;
 			wiImage::Draw(shadedSceneRT.GetTextureResolvedMSAA(threadID), fx, threadID);
 		}
 		fx.process.clear();
 
-		wiRenderer::GenerateMipChain(rtBloom[0].GetTexture(), wiRenderer::MIPGENFILTER_LINEAR, threadID);
-
-		rtBloom[1].Set(threadID); //horizontal
+		rtBloom[0].Set(threadID); //horizontal
 		{
-			fx.mipLevel = 5.32f;
 			fx.process.setBlur(XMFLOAT2(getBloomStrength(), 0));
-			fx.blendFlag = BLENDMODE_OPAQUE;
-			wiImage::Draw(rtBloom[0].GetTexture(), fx, threadID);
+			wiImage::Draw(rtBloom[1].GetTexture(), fx, threadID);
 		}
-		rtBloom[2].Set(threadID); //vertical
+		wiRenderer::GetDevice()->UnbindResources(TEXSLOT_ONDEMAND0, 1, threadID);
+		rtBloom[1].Set(threadID); //vertical
 		{
 			fx.process.setBlur(XMFLOAT2(0, getBloomStrength()));
-			fx.blendFlag = BLENDMODE_OPAQUE;
+			wiImage::Draw(rtBloom[0].GetTexture(), fx, threadID);
+		}
+		rtBloom[2].Set(threadID); //horizontal
+		{
+			fx.process.setBlur(XMFLOAT2(getBloomStrength(), 0));
 			wiImage::Draw(rtBloom[1].GetTexture(), fx, threadID);
+		}
+		rtBloom[3].Set(threadID); //vertical
+		{
+			fx.process.setBlur(XMFLOAT2(0, getBloomStrength()));
+			wiImage::Draw(rtBloom[2].GetTexture(), fx, threadID);
+		}
+		rtBloom[4].Set(threadID); //horizontal
+		{
+			fx.process.setBlur(XMFLOAT2(getBloomStrength(), 0));
+			wiImage::Draw(rtBloom[3].GetTexture(), fx, threadID);
+		}
+		rtBloom[5].Set(threadID); //vertical
+		{
+			fx.process.setBlur(XMFLOAT2(0, getBloomStrength()));
+			wiImage::Draw(rtBloom[4].GetTexture(), fx, threadID);
+		}
+		rtBloom[6].Set(threadID); //horizontal
+		{
+			fx.process.setBlur(XMFLOAT2(getBloomStrength(), 0));
+			wiImage::Draw(rtBloom[5].GetTexture(), fx, threadID);
+		}
+		rtBloom[7].Set(threadID); //vertical
+		{
+			fx.process.setBlur(XMFLOAT2(0, getBloomStrength()));
+			wiImage::Draw(rtBloom[6].GetTexture(), fx, threadID);
 		}
 		fx.process.clear();
 
@@ -534,7 +562,10 @@ void RenderPath3D::RenderComposition(wiRenderTarget& shadedSceneRT, wiRenderTarg
 			fx.blendFlag = BLENDMODE_ADDITIVE;
 			fx.enableFullScreen();
 			fx.process.clear();
-			wiImage::Draw(rtBloom.back().GetTexture(), fx, threadID);
+			wiImage::Draw(rtBloom[1].GetTexture(), fx, threadID);
+			wiImage::Draw(rtBloom[3].GetTexture(), fx, threadID);
+			wiImage::Draw(rtBloom[5].GetTexture(), fx, threadID);
+			wiImage::Draw(rtBloom[7].GetTexture(), fx, threadID);
 			fx.disableFullScreen();
 		}
 		wiRenderer::GetDevice()->EventEnd(threadID);
