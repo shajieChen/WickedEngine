@@ -1,11 +1,9 @@
 #pragma once
 #include "RenderPath.h"
 #include "wiGUI.h"
+#include "wiSceneSystem_Decl.h"
 
 #include <string>
-
-class wiSprite;
-class wiFont;
 
 static const std::string DEFAULT_RENDERLAYER = "default";
 
@@ -16,8 +14,8 @@ struct RenderItem2D
 		SPRITE,
 		FONT,
 	} type;
-	wiSprite* sprite = nullptr;
-	wiFont* font = nullptr;
+	wiSceneSystem::SpriteComponent* sprite = nullptr;
+	wiSceneSystem::TextComponent* font = nullptr;
 	int order = 0;
 };
 struct RenderLayer2D
@@ -53,23 +51,23 @@ public:
 
 	const wiGraphics::Texture2D& GetRenderResult() { return rtFinal; }
 
-	void addSprite(wiSprite* sprite, const std::string& layer = DEFAULT_RENDERLAYER);
-	void removeSprite(wiSprite* sprite);
+	void addSprite(wiSceneSystem::SpriteComponent* sprite, const std::string& layer = DEFAULT_RENDERLAYER);
+	void removeSprite(wiSceneSystem::SpriteComponent* sprite);
 	void clearSprites();
 	void setSpriteSpeed(float value) { spriteSpeed = value; }
 	float getSpriteSpeed() { return spriteSpeed; }
-	int getSpriteOrder(wiSprite* sprite);
+	int getSpriteOrder(wiSceneSystem::SpriteComponent* sprite);
 
-	void addFont(wiFont* font, const std::string& layer = DEFAULT_RENDERLAYER);
-	void removeFont(wiFont* font);
+	void addFont(wiSceneSystem::TextComponent* font, const std::string& layer = DEFAULT_RENDERLAYER);
+	void removeFont(wiSceneSystem::TextComponent* font);
 	void clearFonts();
-	int getFontOrder(wiFont* font);
+	int getFontOrder(wiSceneSystem::TextComponent* font);
 
 	std::vector<RenderLayer2D> layers;
 	void addLayer(const std::string& name);
 	void setLayerOrder(const std::string& name, int order);
-	void SetSpriteOrder(wiSprite* sprite, int order);
-	void SetFontOrder(wiFont* font, int order);
+	void SetSpriteOrder(wiSceneSystem::SpriteComponent* sprite, int order);
+	void SetFontOrder(wiSceneSystem::TextComponent* font, int order);
 	void SortLayers();
 	void CleanLayers();
 

@@ -7,7 +7,7 @@ struct wiImageParams;
 
 namespace wiImage
 {
-	void Draw(const wiImageParams& params, GRAPHICSTHREAD threadID);
+	void Draw(const wiGraphics::Texture2D* texture, const wiImageParams& params, GRAPHICSTHREAD threadID);
 
 	void DrawDeferred(
 		const wiGraphics::Texture2D* lightmap_diffuse, 
@@ -88,15 +88,12 @@ struct wiImageParams
 	SAMPLEMODE sampleFlag = SAMPLEMODE_MIRROR;
 	QUALITY quality = QUALITY_LINEAR;
 
-	const wiGraphics::Texture2D* texture = nullptr;
-	const wiGraphics::Texture2D* mask = nullptr;
+	const wiGraphics::Texture2D* maskMap = nullptr;
 	const wiGraphics::Texture2D* distortionMap = nullptr;
 
-	// Generic texture
-	void setTexture(const wiGraphics::Texture2D* value) { texture = value; }
-	// The generic texture will be multiplied by this texture
-	void setMask(const wiGraphics::Texture2D* value) { mask = value; }
-	// The normalmap texture which should distort the refraction source
+	// The texture will be multiplied by this texture
+	void setMaskMap(const wiGraphics::Texture2D* value) { maskMap = value; }
+	// The normalmap texture which should distort the texture
 	void setDistortionMap(const wiGraphics::Texture2D* value) { distortionMap = value; }
 
 	constexpr bool isDrawRectEnabled() const { return _flags & DRAWRECT; }
@@ -210,4 +207,8 @@ struct wiImageParams
 		void setLightShaftCenter(const XMFLOAT2& pos) { type = LIGHTSHAFT; params.sun.x = pos.x; params.sun.y = pos.y; }
 	};
 	PostProcess process;
+
+	wiImageParams() {}
+	wiImageParams(float width, float height) :siz(XMFLOAT2(width, height)) {}
+	wiImageParams(float x, float y, float width, float height) :pos(XMFLOAT3(x, y, 0)), siz(XMFLOAT2(width, height)) {}
 };

@@ -11,6 +11,7 @@
 #include <mutex>
 #include <sstream>
 #include <deque>
+#include <string>
 
 using namespace std;
 using namespace wiGraphics;
@@ -35,7 +36,8 @@ namespace wiBackLog
 	int scroll = 0;
 	stringstream inputArea;
 	int historyPos = 0;
-	wiFont font;
+	wiFontParams fontParams;
+	wstring text;
 	wiSpinLock logLock;
 
 	std::unique_ptr<Texture2D> backgroundTex;
@@ -74,7 +76,7 @@ namespace wiBackLog
 			pos = 0;
 		}
 
-		if (scroll + font.textHeight() > int(wiRenderer::GetDevice()->GetScreenHeight() * 0.8f))
+		if (scroll + wiFont::ComputeTextHeight(text, fontParams) > int(wiRenderer::GetDevice()->GetScreenHeight() * 0.8f))
 		{
 			scroll -= 2;
 		}
@@ -95,11 +97,11 @@ namespace wiBackLog
 			fx.pos = XMFLOAT3(0, pos, 0);
 			fx.opacity = wiMath::Lerp(1, 0, -pos / wiRenderer::GetDevice()->GetScreenHeight());
 			wiImage::Draw(backgroundTex.get(), fx, GRAPHICSTHREAD_IMMEDIATE);
-			font.SetText(getText());
-			font.params.posX = 50;
-			font.params.posY = (int)pos + (int)scroll;
-			font.Draw(GRAPHICSTHREAD_IMMEDIATE);
-			wiFont(inputArea.str().c_str(), wiFontParams(10, wiRenderer::GetDevice()->GetScreenHeight() - 10, WIFONTSIZE_DEFAULT, WIFALIGN_LEFT, WIFALIGN_BOTTOM)).Draw(GRAPHICSTHREAD_IMMEDIATE);
+			wiFont::SetText(text, getText());
+			fontParams.posX = 50;
+			fontParams.posY = (int)pos + (int)scroll;
+			wiFont::Draw(text, fontParams, GRAPHICSTHREAD_IMMEDIATE);
+			wiFont::Draw(inputArea.str().c_str(), wiFontParams(10, wiRenderer::GetDevice()->GetScreenHeight() - 10, WIFONTSIZE_DEFAULT, WIFALIGN_LEFT, WIFALIGN_BOTTOM), GRAPHICSTHREAD_IMMEDIATE);
 		}
 	}
 
@@ -187,11 +189,11 @@ namespace wiBackLog
 	}
 	void setFontSize(int value)
 	{
-		font.params.size = value;
+		fontParams.size = value;
 	}
 	void setFontRowspacing(int value)
 	{
-		font.params.spacingY = value;
+		fontParams.spacingY = value;
 	}
 
 	bool isActive() { return state == IDLE; }

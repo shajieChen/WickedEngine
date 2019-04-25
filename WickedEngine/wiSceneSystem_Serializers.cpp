@@ -666,6 +666,38 @@ namespace wiSceneSystem
 			archive << oceanParameters.surfaceDisplacementTolerance;
 		}
 	}
+	void SpriteComponent::Serialize(wiArchive& archive, uint32_t seed)
+	{
+		if (archive.GetVersion() < 29)
+		{
+			return;
+		}
+
+		if (archive.IsReadMode())
+		{
+
+		}
+		else
+		{
+
+		}
+	}
+	void TextComponent::Serialize(wiArchive& archive, uint32_t seed)
+	{
+		if (archive.GetVersion() < 29)
+		{
+			return;
+		}
+
+		if (archive.IsReadMode())
+		{
+
+		}
+		else
+		{
+
+		}
+	}
 
 	void Scene::Serialize(wiArchive& archive)
 	{
@@ -707,6 +739,8 @@ namespace wiSceneSystem
 		emitters.Serialize(archive, seed);
 		hairs.Serialize(archive, seed);
 		weathers.Serialize(archive, seed);
+		sprites.Serialize(archive, seed);
+		texts.Serialize(archive, seed);
 
 	}
 
@@ -939,6 +973,24 @@ namespace wiSceneSystem
 				if (component_exists)
 				{
 					auto& component = weathers.Create(entity);
+					component.Serialize(archive, propagateSeedDeep ? seed : 0);
+				}
+			}
+			{
+				bool component_exists;
+				archive >> component_exists;
+				if (component_exists)
+				{
+					auto& component = sprites.Create(entity);
+					component.Serialize(archive, propagateSeedDeep ? seed : 0);
+				}
+			}
+			{
+				bool component_exists;
+				archive >> component_exists;
+				if (component_exists)
+				{
+					auto& component = texts.Create(entity);
 					component.Serialize(archive, propagateSeedDeep ? seed : 0);
 				}
 			}
@@ -1236,6 +1288,30 @@ namespace wiSceneSystem
 			}
 			{
 				auto component = weathers.GetComponent(entity);
+				if (component != nullptr)
+				{
+					archive << true;
+					component->Serialize(archive, seed);
+				}
+				else
+				{
+					archive << false;
+				}
+			}
+			{
+				auto component = sprites.GetComponent(entity);
+				if (component != nullptr)
+				{
+					archive << true;
+					component->Serialize(archive, seed);
+				}
+				else
+				{
+					archive << false;
+				}
+			}
+			{
+				auto component = texts.GetComponent(entity);
 				if (component != nullptr)
 				{
 					archive << true;

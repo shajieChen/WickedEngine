@@ -1258,6 +1258,9 @@ namespace wiSceneSystem
 		entityCount = max(entityCount, animations.GetCount());
 		entityCount = max(entityCount, emitters.GetCount());
 		entityCount = max(entityCount, hairs.GetCount());
+		entityCount = max(entityCount, weathers.GetCount());
+		entityCount = max(entityCount, sprites.GetCount());
+		entityCount = max(entityCount, texts.GetCount());
 		return entityCount;
 	}
 
@@ -1288,6 +1291,8 @@ namespace wiSceneSystem
 		emitters.Remove(entity);
 		hairs.Remove(entity);
 		weathers.Remove(entity);
+		sprites.Remove(entity);
+		texts.Remove(entity);
 	}
 	Entity Scene::Entity_FindByName(const std::string& name)
 	{

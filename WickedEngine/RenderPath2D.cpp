@@ -1,10 +1,10 @@
 #include "RenderPath2D.h"
 #include "wiResourceManager.h"
-#include "wiSprite.h"
-#include "wiFont.h"
+#include "wiSceneSystem.h"
 #include "wiRenderer.h"
 
 using namespace wiGraphics;
+using namespace wiSceneSystem;
 
 RenderPath2D::RenderPath2D()
 {
@@ -50,12 +50,10 @@ void RenderPath2D::Unload()
 		{
 			if (y.sprite != nullptr)
 			{
-				y.sprite->CleanUp();
 				delete y.sprite;
 			}
 			if (y.font != nullptr)
 			{
-				y.font->CleanUp();
 				delete y.font;
 			}
 		}
@@ -86,17 +84,6 @@ void RenderPath2D::Update(float dt)
 }
 void RenderPath2D::FixedUpdate()
 {
-	for (auto& x : layers)
-	{
-		for (auto& y : x.items)
-		{
-			if (y.sprite != nullptr)
-			{
-				y.sprite->FixedUpdate(getSpriteSpeed());
-			}
-		}
-	}
-
 	RenderPath::FixedUpdate();
 }
 void RenderPath2D::Render() const
@@ -149,7 +136,7 @@ void RenderPath2D::Compose() const
 }
 
 
-void RenderPath2D::addSprite(wiSprite* sprite, const std::string& layer)
+void RenderPath2D::addSprite(SpriteComponent* sprite, const std::string& layer)
 {
 	for (auto& x : layers)
 	{
@@ -162,7 +149,7 @@ void RenderPath2D::addSprite(wiSprite* sprite, const std::string& layer)
 	}
 	SortLayers();
 }
-void RenderPath2D::removeSprite(wiSprite* sprite)
+void RenderPath2D::removeSprite(SpriteComponent* sprite)
 {
 	for (auto& x : layers)
 	{
@@ -187,7 +174,7 @@ void RenderPath2D::clearSprites()
 	}
 	CleanLayers();
 }
-int RenderPath2D::getSpriteOrder(wiSprite* sprite)
+int RenderPath2D::getSpriteOrder(SpriteComponent* sprite)
 {
 	for (auto& x : layers)
 	{
@@ -202,7 +189,7 @@ int RenderPath2D::getSpriteOrder(wiSprite* sprite)
 	return 0;
 }
 
-void RenderPath2D::addFont(wiFont* font, const std::string& layer)
+void RenderPath2D::addFont(TextComponent* font, const std::string& layer)
 {
 	for (auto& x : layers)
 	{
@@ -215,7 +202,7 @@ void RenderPath2D::addFont(wiFont* font, const std::string& layer)
 	}
 	SortLayers();
 }
-void RenderPath2D::removeFont(wiFont* font)
+void RenderPath2D::removeFont(TextComponent* font)
 {
 	for (auto& x : layers)
 	{
@@ -240,7 +227,7 @@ void RenderPath2D::clearFonts()
 	}
 	CleanLayers();
 }
-int RenderPath2D::getFontOrder(wiFont* font)
+int RenderPath2D::getFontOrder(TextComponent* font)
 {
 	for (auto& x : layers)
 	{
@@ -280,7 +267,7 @@ void RenderPath2D::setLayerOrder(const std::string& name, int order)
 	}
 	SortLayers();
 }
-void RenderPath2D::SetSpriteOrder(wiSprite* sprite, int order)
+void RenderPath2D::SetSpriteOrder(SpriteComponent* sprite, int order)
 {
 	for (auto& x : layers)
 	{
@@ -294,7 +281,7 @@ void RenderPath2D::SetSpriteOrder(wiSprite* sprite, int order)
 	}
 	SortLayers();
 }
-void RenderPath2D::SetFontOrder(wiFont* font, int order)
+void RenderPath2D::SetFontOrder(TextComponent* font, int order)
 {
 	for (auto& x : layers)
 	{

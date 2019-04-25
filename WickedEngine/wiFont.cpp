@@ -440,7 +440,12 @@ namespace wiFont
 		return int(fontStyles.size() - 1);
 	}
 
-
+	void wiFont::Draw(const std::string& text, const wiFontParams& params, GRAPHICSTHREAD threadID)
+	{
+		wstring native_text;
+		SetText(native_text, text);
+		Draw(native_text, params, threadID);
+	}
 	void wiFont::Draw(const std::wstring& text, const wiFontParams& params, GRAPHICSTHREAD threadID)
 	{
 		if (!initialized.load() || text.length() <= 0)
@@ -524,7 +529,12 @@ namespace wiFont
 		UpdatePendingGlyphs();
 	}
 
-
+	int wiFont::ComputeTextWidth(const std::string& text, const wiFontParams& params)
+	{
+		wstring native_text;
+		SetText(native_text, text);
+		return ComputeTextWidth(native_text, params);
+	}
 	int wiFont::ComputeTextWidth(const std::wstring& text, const wiFontParams& params)
 	{
 		if (params.style >= fontStyles.size())
@@ -565,6 +575,12 @@ namespace wiFont
 		}
 
 		return maxWidth;
+	}
+	int wiFont::ComputeTextHeight(const std::string& text, const wiFontParams& params)
+	{
+		wstring native_text;
+		SetText(native_text, text);
+		return ComputeTextHeight(native_text, params);
 	}
 	int wiFont::ComputeTextHeight(const std::wstring& text, const wiFontParams& params)
 	{
