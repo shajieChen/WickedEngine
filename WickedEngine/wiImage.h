@@ -7,7 +7,7 @@ struct wiImageParams;
 
 namespace wiImage
 {
-	void Draw(const wiGraphics::Texture2D* texture, const wiImageParams& params, GRAPHICSTHREAD threadID);
+	void Draw(const wiImageParams& params, GRAPHICSTHREAD threadID);
 
 	void DrawDeferred(
 		const wiGraphics::Texture2D* lightmap_diffuse, 
@@ -62,38 +62,72 @@ struct wiImageParams
 	};
 	uint32_t _flags = EMPTY;
 
-	XMFLOAT3 pos;
-	XMFLOAT2 siz;
-	XMFLOAT2 scale;
-	XMFLOAT4 col;
-	XMFLOAT4 drawRect;
-	XMFLOAT4 lookAt;			//(x,y,z) : direction, (w) :isenabled?
-	XMFLOAT2 texOffset;
-	XMFLOAT2 pivot;				// (0,0) : upperleft, (0.5,0.5) : center, (1,1) : bottomright
-	float rotation;
-	float mipLevel;
-	float fade;
-	float opacity;
-	XMFLOAT2 corners[4];		// you can deform the image by its corners (0: top left, 1: top right, 2: bottom left, 3: bottom right)
+	XMFLOAT3 pos = XMFLOAT3(0, 0, 0);
+	XMFLOAT2 siz = XMFLOAT2(1, 1);
+	XMFLOAT2 scale = XMFLOAT2(1, 1);
+	XMFLOAT4 col = XMFLOAT4(1, 1, 1, 1);
+	XMFLOAT4 drawRect = XMFLOAT4(0, 0, 0, 0);
+	XMFLOAT4 lookAt = XMFLOAT4(0, 0, 0, 0);			//(x,y,z) : direction, (w) :isenabled?
+	XMFLOAT2 texOffset = XMFLOAT2(0, 0);
+	XMFLOAT2 pivot = XMFLOAT2(0, 0);				// (0,0) : upperleft, (0.5,0.5) : center, (1,1) : bottomright
+	float rotation = 0.0f;
+	float mipLevel = 0.0f;
+	float fade = 0.0f;
+	float opacity = 1.0f;
+	XMFLOAT2 corners[4] = {
+		XMFLOAT2(0, 0),
+		XMFLOAT2(1, 0),
+		XMFLOAT2(0, 1),
+		XMFLOAT2(1, 1),
+	};		// you can deform the image by its corners (0: top left, 1: top right, 2: bottom left, 3: bottom right)
 
-	UINT stencilRef;
-	STENCILMODE stencilComp;
-	BLENDMODE blendFlag;
-	ImageType typeFlag;
-	SAMPLEMODE sampleFlag;
-	QUALITY quality;
+	UINT stencilRef = 0;
+	STENCILMODE stencilComp = STENCILMODE_DISABLED;
+	BLENDMODE blendFlag = BLENDMODE_ALPHA;
+	ImageType typeFlag = SCREEN;
+	SAMPLEMODE sampleFlag = SAMPLEMODE_MIRROR;
+	QUALITY quality = QUALITY_LINEAR;
 
-	const wiGraphics::Texture2D* maskMap;
-	const wiGraphics::Texture2D* distortionMap;
-	const wiGraphics::Texture2D* refractionSource;
+	const wiGraphics::Texture2D* texture = nullptr;
+	const wiGraphics::Texture2D* mask = nullptr;
+	const wiGraphics::Texture2D* distortionMap = nullptr;
+
 	// Generic texture
-	void setMaskMap(const wiGraphics::Texture2D* view) { maskMap = view; }
+	void setTexture(const wiGraphics::Texture2D* value) { texture = value; }
+	// The generic texture will be multiplied by this texture
+	void setMask(const wiGraphics::Texture2D* value) { mask = value; }
 	// The normalmap texture which should distort the refraction source
-	void setDistortionMap(const wiGraphics::Texture2D* view) { distortionMap = view; }
-	// The texture which should be distorted
-	void setRefractionSource(const wiGraphics::Texture2D* view) { refractionSource = view; }
+	void setDistortionMap(const wiGraphics::Texture2D* value) { distortionMap = value; }
 
-	struct PostProcess 
+	constexpr bool isDrawRectEnabled() const { return _flags & DRAWRECT; }
+	constexpr bool isMirrorEnabled() const { return _flags & MIRROR; }
+	constexpr bool isExtractNormalMapEnabled() const { return _flags & EXTRACT_NORMALMAP; }
+	constexpr bool isHDREnabled() const { return _flags & HDR; }
+	constexpr bool isFullScreenEnabled() const { return _flags & FULLSCREEN; }
+
+	// enables draw rectangle (cutout texture outside draw rectangle)
+	void enableDrawRect(const XMFLOAT4& rect) { _flags |= DRAWRECT; drawRect = rect; }
+	// mirror the image horizontally
+	void enableMirror() { _flags |= MIRROR; }
+	// enable normal map extraction shader that will perform texcolor * 2 - 1 (preferably onto a signed render target)
+	void enableExtractNormalMap() { _flags |= EXTRACT_NORMALMAP; }
+	// enable HDR blending to float render target
+	void enableHDR() { _flags |= HDR; }
+	// enable full screen override. It just draws texture onto the full screen, disabling any other setup except sampler and stencil)
+	void enableFullScreen() { _flags |= FULLSCREEN; }
+
+	// disable draw rectangle (whole texture will be drawn, no cutout)
+	void disableDrawRect() { _flags &= ~DRAWRECT; }
+	// disable mirroring
+	void disableMirror() { _flags &= ~MIRROR; }
+	// disable normal map extraction shader
+	void disableExtractNormalMap() { _flags &= ~EXTRACT_NORMALMAP; }
+	// if you want to render onto normalized render target
+	void disableHDR() { _flags &= ~HDR; }
+	// disable full screen override
+	void disableFullScreen() { _flags &= ~FULLSCREEN; }
+
+	struct PostProcess
 	{
 		enum POSTPROCESS
 		{
@@ -153,11 +187,11 @@ struct wiImageParams
 		void setBloom(float threshold) { type = BLOOMSEPARATE; params.bloomThreshold = threshold; }
 		void setDOF(float focus) { if (focus > 0) { type = DEPTHOFFIELD; params.dofFocus = focus; } }
 		void setMotionBlur() { type = MOTIONBLUR; }
-		void setOutline(float threshold = 0.1f, float thickness = 1.0f, const XMFLOAT3& color = XMFLOAT3(0, 0, 0)) 
-		{ 
-			type = OUTLINE; 
-			params.outline.threshold = threshold; 
-			params.outline.thickness = thickness; 
+		void setOutline(float threshold = 0.1f, float thickness = 1.0f, const XMFLOAT3& color = XMFLOAT3(0, 0, 0))
+		{
+			type = OUTLINE;
+			params.outline.threshold = threshold;
+			params.outline.thickness = thickness;
 			params.outline.colorR = color.x;
 			params.outline.colorG = color.y;
 			params.outline.colorB = color.z;
@@ -176,76 +210,4 @@ struct wiImageParams
 		void setLightShaftCenter(const XMFLOAT2& pos) { type = LIGHTSHAFT; params.sun.x = pos.x; params.sun.y = pos.y; }
 	};
 	PostProcess process;
-
-	void init() 
-	{
-		_flags = EMPTY;
-		pos = XMFLOAT3(0, 0, 0);
-		siz = XMFLOAT2(1, 1);
-		col = XMFLOAT4(1, 1, 1, 1);
-		scale = XMFLOAT2(1, 1);
-		drawRect = XMFLOAT4(0, 0, 0, 0);
-		texOffset = XMFLOAT2(0, 0);
-		lookAt = XMFLOAT4(0, 0, 0, 0);
-		pivot = XMFLOAT2(0, 0);
-		fade = rotation = 0.0f;
-		opacity = 1.0f;
-		mipLevel = 0.f;
-		stencilRef = 0;
-		stencilComp = STENCILMODE_DISABLED;
-		blendFlag = BLENDMODE_ALPHA;
-		typeFlag = SCREEN;
-		sampleFlag = SAMPLEMODE_MIRROR;
-		quality = QUALITY_LINEAR;
-		maskMap = nullptr;
-		distortionMap = nullptr;
-		refractionSource = nullptr;
-		corners[0] = XMFLOAT2(0, 0);
-		corners[1] = XMFLOAT2(1, 0);
-		corners[2] = XMFLOAT2(0, 1);
-		corners[3] = XMFLOAT2(1, 1);
-	}
-
-	constexpr bool isDrawRectEnabled() const { return _flags & DRAWRECT; }
-	constexpr bool isMirrorEnabled() const { return _flags & MIRROR; }
-	constexpr bool isExtractNormalMapEnabled() const { return _flags & EXTRACT_NORMALMAP; }
-	constexpr bool isHDREnabled() const { return _flags & HDR; }
-	constexpr bool isFullScreenEnabled() const { return _flags & FULLSCREEN; }
-
-	// enables draw rectangle (cutout texture outside draw rectangle)
-	void enableDrawRect(const XMFLOAT4& rect) { _flags |= DRAWRECT; drawRect = rect; }
-	// mirror the image horizontally
-	void enableMirror() { _flags |= MIRROR; }
-	// enable normal map extraction shader that will perform texcolor * 2 - 1 (preferably onto a signed render target)
-	void enableExtractNormalMap() { _flags |= EXTRACT_NORMALMAP; }
-	// enable HDR blending to float render target
-	void enableHDR() { _flags |= HDR; }
-	// enable full screen override. It just draws texture onto the full screen, disabling any other setup except sampler and stencil)
-	void enableFullScreen() { _flags |= FULLSCREEN; }
-
-	// disable draw rectangle (whole texture will be drawn, no cutout)
-	void disableDrawRect() { _flags &= ~DRAWRECT; }
-	// disable mirroring
-	void disableMirror() { _flags &= ~MIRROR; }
-	// disable normal map extraction shader
-	void disableExtractNormalMap() { _flags &= ~EXTRACT_NORMALMAP; }
-	// if you want to render onto normalized render target
-	void disableHDR() { _flags &= ~HDR; }
-	// disable full screen override
-	void disableFullScreen() { _flags &= ~FULLSCREEN; }
-
-
-	wiImageParams() {
-		init();
-	}
-	wiImageParams(float width, float height) {
-		init();
-		siz = XMFLOAT2(width, height);
-	}
-	wiImageParams(float posX, float posY, float width, float height) {
-		init();
-		pos.x = posX;
-		pos.y = posY;
-		siz = XMFLOAT2(width, height);
-	}
 };

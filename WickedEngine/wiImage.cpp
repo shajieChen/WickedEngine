@@ -58,7 +58,7 @@ namespace wiImage
 	std::atomic_bool initialized = false;
 
 
-	void Draw(const Texture2D* texture, const wiImageParams& params, GRAPHICSTHREAD threadID)
+	void Draw(const wiImageParams& params, GRAPHICSTHREAD threadID)
 	{
 		if (!initialized.load())
 		{
@@ -70,7 +70,7 @@ namespace wiImage
 
 		bool fullScreenEffect = false;
 
-		device->BindResource(PS, texture, TEXSLOT_ONDEMAND0, threadID);
+		device->BindResource(PS, params.texture, TEXSLOT_ONDEMAND0, threadID);
 
 		device->BindStencilRef(params.stencilRef, threadID);
 
@@ -169,7 +169,7 @@ namespace wiImage
 				XMStoreFloat4(&cb.xCorners[i], V);
 			}
 
-			const TextureDesc& desc = texture->GetDesc();
+			const TextureDesc& desc = params.texture->GetDesc();
 			const float inv_width = 1.0f / float(desc.Width);
 			const float inv_height = 1.0f / float(desc.Height);
 
@@ -200,7 +200,7 @@ namespace wiImage
 			// Determine relevant image rendering pixel shader:
 			IMAGE_SHADER targetShader;
 			bool NormalmapSeparate = params.isExtractNormalMapEnabled();
-			bool Mask = params.maskMap != nullptr;
+			bool Mask = params.mask != nullptr;
 			bool Distort = params.distortionMap != nullptr;
 			if (NormalmapSeparate)
 			{
@@ -322,9 +322,8 @@ namespace wiImage
 		}
 
 		const GPUResource* res[] = {
-			params.maskMap,
+			params.mask,
 			params.distortionMap,
-			params.refractionSource,
 		};
 		device->BindResources(PS, res, TEXSLOT_ONDEMAND1, ARRAYSIZE(res), threadID);
 

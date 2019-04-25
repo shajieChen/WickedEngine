@@ -997,6 +997,139 @@ namespace wiSceneSystem
 		UpdateCamera();
 	}
 
+	void SpriteComponent::LoadTexture(const std::string& fileName)
+	{
+		textureName = fileName;
+		params.setTexture((Texture2D*)wiResourceManager::GetGlobal().add(textureName));
+	}
+	void SpriteComponent::LoadMask(const std::string& fileName)
+	{
+		maskName = fileName;
+		params.setMask((Texture2D*)wiResourceManager::GetGlobal().add(maskName));
+	}
+	void SpriteComponent::LoadDistortionMap(const std::string& fileName)
+	{
+		distortionMapName = fileName;
+		params.setDistortionMap((Texture2D*)wiResourceManager::GetGlobal().add(distortionMapName));
+	}
+	void SpriteComponent::Update(float dt)
+	{
+		params.rotation += anim.rot*dt;
+		params.opacity += anim.opa*dt;
+		if (params.opacity >= 1) {
+			if (anim.repeatable) { params.opacity = 0.99f; anim.opa *= -1; }
+			else				params.opacity = 1;
+		}
+		else if (params.opacity <= 0) {
+			if (anim.repeatable) { params.opacity = 0.01f; anim.opa *= -1; }
+			else				params.opacity = 0;
+		}
+		params.fade += anim.fad*dt;
+		if (params.fade >= 1) {
+			if (anim.repeatable) { params.fade = 0.99f; anim.fad *= -1; }
+			else				params.fade = 1;
+		}
+		else if (params.fade <= 0) {
+			if (anim.repeatable) { params.fade = 0.01f; anim.fad *= -1; }
+			else				params.fade = 0;
+		}
+
+		params.texOffset.x += anim.movingTexAnim.speedX*dt;
+		params.texOffset.y += anim.movingTexAnim.speedY*dt;
+
+		// Draw rect anim:
+		if (anim.drawRectAnim.frameCount > 0)
+		{
+			anim.drawRectAnim._elapsedTime += dt * anim.drawRectAnim.frameRate;
+			if (anim.drawRectAnim._elapsedTime >= 1.0f)
+			{
+				// Reset timer:
+				anim.drawRectAnim._elapsedTime = 0;
+
+				if (anim.drawRectAnim.horizontalFrameCount == 0)
+				{
+					// If no horizontal frame count was specified, it means that all the frames are horizontal:
+					anim.drawRectAnim.horizontalFrameCount = anim.drawRectAnim.frameCount;
+				}
+
+				// Advance frame counter:
+				anim.drawRectAnim._currentFrame++;
+
+				if (anim.drawRectAnim._currentFrame < anim.drawRectAnim.frameCount)
+				{
+					// Step one frame horizontally if animation is still playing:
+					params.drawRect.x += params.drawRect.z;
+
+					if (anim.drawRectAnim._currentFrame > 0 &&
+						anim.drawRectAnim._currentFrame % anim.drawRectAnim.horizontalFrameCount == 0)
+					{
+						// if the animation is multiline, we reset horizontally and step downwards:
+						params.drawRect.x -= params.drawRect.z * anim.drawRectAnim.horizontalFrameCount;
+						params.drawRect.y += params.drawRect.w;
+					}
+				}
+				else if (anim.repeatable)
+				{
+					// restart if repeatable:
+					const int rewind_X = (anim.drawRectAnim.frameCount - 1) % anim.drawRectAnim.horizontalFrameCount;
+					const int rewind_Y = (anim.drawRectAnim.frameCount - 1) / anim.drawRectAnim.horizontalFrameCount;
+					params.drawRect.x -= params.drawRect.z * rewind_X;
+					params.drawRect.y -= params.drawRect.w * rewind_Y;
+					anim.drawRectAnim._currentFrame = 0;
+				}
+
+			}
+		}
+
+		// Wobble anim:
+		if (anim.wobbleAnim.amount.x > 0 || anim.wobbleAnim.amount.y > 0)
+		{
+			// offset a random corner of the sprite:
+			int corner = wiRandom::getRandom(0, 4);
+			anim.wobbleAnim.corner_target_offsets[corner].x = (wiRandom::getRandom(0, 1000) * 0.001f - 0.5f) * anim.wobbleAnim.amount.x;
+			anim.wobbleAnim.corner_target_offsets[corner].y = (wiRandom::getRandom(0, 1000) * 0.001f - 0.5f) * anim.wobbleAnim.amount.y;
+
+			// All corners of the sprite will always follow the offset corners to obtain the wobble effect:
+			wiImageParams default_params;
+			for (int i = 0; i < 4; ++i)
+			{
+				XMVECTOR I = XMLoadFloat2(&default_params.corners[i]);
+				XMVECTOR V = XMLoadFloat2(&params.corners[i]);
+				XMVECTOR O = XMLoadFloat2(&anim.wobbleAnim.corner_target_offsets[i]);
+
+				V = XMVectorLerp(V, I + O, 0.01f);
+
+				XMStoreFloat2(&params.corners[i], V);
+			}
+		}
+	}
+	void SpriteComponent::Draw(GRAPHICSTHREAD threadID) const
+	{
+		wiImage::Draw(params, threadID);
+	}
+
+
+	int TextComponent::GetTextWidth() const
+	{
+		return wiFont::ComputeTextWidth(native_text, params);
+	}
+	int TextComponent::GetTextHeight() const
+	{
+		return wiFont::ComputeTextHeight(native_text, params);
+	}
+	void TextComponent::SetText(const std::string& text)
+	{
+		wiFont::SetText(native_text, text);
+	}
+	std::string TextComponent::GetText() const
+	{
+		return text;
+	}
+	void TextComponent::Draw(GRAPHICSTHREAD threadID) const
+	{
+		wiFont::Draw(native_text, params, threadID);
+	}
+
 
 	void Scene::Update(float dt)
 	{
@@ -2077,6 +2210,26 @@ namespace wiSceneSystem
 				weather.sunDirection = light.direction;
 			}
 		}
+	}
+	void RunSpriteUpdateSystem(
+		const ComponentManager<TransformComponent>& transforms,
+		ComponentManager<SpriteComponent>& sprites,
+		float dt
+	)
+	{
+		for (size_t i = 0; i < sprites.GetCount(); ++i)
+		{
+			SpriteComponent& sprite = sprites[i];
+
+			sprite.Update(dt);
+		}
+	}
+	void RunTextUpdateSystem(
+		const ComponentManager<TransformComponent>& transforms,
+		ComponentManager<TextComponent>& texts
+	)
+	{
+
 	}
 
 

@@ -15,21 +15,6 @@ public:
 	RenderPath2D_BindLua(lua_State *L);
 	~RenderPath2D_BindLua();
 
-	int AddSprite(lua_State *L);
-	int AddFont(lua_State* L);
-	int RemoveSprite(lua_State *L);
-	int RemoveFont(lua_State* L);
-	int ClearSprites(lua_State *L);
-	int ClearFonts(lua_State* L);
-	int GetSpriteOrder(lua_State* L);
-	int GetFontOrder(lua_State* L);
-
-	int AddLayer(lua_State* L);
-	int GetLayers(lua_State* L);
-	int SetLayerOrder(lua_State* L);
-	int SetSpriteOrder(lua_State* L);
-	int SetFontOrder(lua_State* L);
-
 	static void Bind();
 };
 

@@ -5,6 +5,8 @@
 #include "wiEmittedParticle.h"
 #include "wiHairParticle.h"
 #include "ShaderInterop_Renderer.h"
+#include "wiImage.h"
+#include "wiFont.h"
 
 #include "wiECS.h"
 #include "wiSceneSystem_Decl.h"
@@ -948,6 +950,87 @@ namespace wiSceneSystem
 		void Serialize(wiArchive& archive, uint32_t seed = 0);
 	};
 
+	struct SpriteComponent
+	{
+		enum FLAGS
+		{
+			EMPTY = 0,
+		};
+		uint32_t _flags = EMPTY;
+
+		wiImageParams params;
+
+		std::string textureName;
+		std::string maskName;
+		std::string distortionMapName;
+
+		struct Anim
+		{
+			struct MovingTexAnim
+			{
+				float speedX = 0; // the speed of texture scrolling animation in horizontal direction
+				float speedY = 0; // the speed of texture scrolling animation in vertical direction
+			};
+			struct DrawRectAnim
+			{
+				float frameRate = 30; // target frame rate of the spritesheet animation (eg. 30, 60, etc.)
+				int frameCount = 1; // how many frames are in the animation in total
+				int horizontalFrameCount = 0; // how many horizontal frames there are (optional, use if the spritesheet contains multiple rows)
+
+				float _elapsedTime = 0; // internal use; you don't need to initialize
+				int _currentFrame = 0; // internal use; you don't need to initialize
+			};
+			struct WobbleAnim
+			{
+				XMFLOAT2 amount = XMFLOAT2(0, 0);	// how much the sprite wobbles in X and Y direction
+
+				XMFLOAT2 corner_target_offsets[4] = {}; // internal use; you don't need to initialize
+			};
+
+			bool repeatable = false;
+			float rot = 0;
+			float opa = 0;
+			float fad = 0;
+			MovingTexAnim movingTexAnim;
+			DrawRectAnim drawRectAnim;
+			WobbleAnim wobbleAnim;
+		};
+		Anim anim;
+
+		void LoadTexture(const std::string& fileName);
+		void LoadMask(const std::string& fileName);
+		void LoadDistortionMap(const std::string& fileName);
+		void Update(float dt);
+		void Draw(GRAPHICSTHREAD threadID) const;
+
+		void Serialize(wiArchive& archive, uint32_t seed = 0);
+	};
+
+	struct TextComponent
+	{
+		enum FLAGS
+		{
+			EMPTY = 0,
+		};
+		uint32_t _flags = EMPTY;
+
+		wiFontParams params;
+		std::string text;
+
+		// Non-serialized attributes:
+		std::wstring native_text;
+
+		int GetTextWidth() const;
+		int GetTextHeight() const;
+
+		void SetText(const std::string& text);
+		std::string GetText() const;
+
+		void Draw(GRAPHICSTHREAD threadID) const;
+
+		void Serialize(wiArchive& archive, uint32_t seed = 0);
+	};
+
 	struct Scene
 	{
 		wiECS::ComponentManager<NameComponent> names;
@@ -975,6 +1058,8 @@ namespace wiSceneSystem
 		wiECS::ComponentManager<wiEmittedParticle> emitters;
 		wiECS::ComponentManager<wiHairParticle> hairs;
 		wiECS::ComponentManager<WeatherComponent> weathers;
+		wiECS::ComponentManager<SpriteComponent> sprites;
+		wiECS::ComponentManager<TextComponent> texts;
 
 		// Non-serialized attributes:
 		AABB bounds;
@@ -1123,6 +1208,16 @@ namespace wiSceneSystem
 		const wiECS::ComponentManager<WeatherComponent>& weathers,
 		const wiECS::ComponentManager<LightComponent>& lights,
 		WeatherComponent& weather
+	);
+	void RunSpriteUpdateSystem(
+		const wiECS::ComponentManager<TransformComponent>& transforms,
+		wiECS::ComponentManager<SpriteComponent>& sprites,
+		float dt
+	);
+	void RunTextUpdateSystem(
+		const wiECS::ComponentManager<TransformComponent>& transforms,
+		wiECS::ComponentManager<TextComponent>& texts,
+		float dt
 	);
 
 
