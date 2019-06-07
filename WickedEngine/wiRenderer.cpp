@@ -3740,7 +3740,7 @@ void UpdatePerFrameData(float dt, uint32_t layerMask)
 					}
 				});
 
-				wiJobSystem::Wait();
+				wiJobSystem::DrainBarrier(wiJobSystem::Barrier());
 
 				// Sort lights based on distance so that closer lights will receive shadow map priority:
 				const size_t lightCount = culling.culledLights.size();
@@ -3848,7 +3848,7 @@ void UpdatePerFrameData(float dt, uint32_t layerMask)
 	ManageEnvProbes();
 	ManageWaterRipples();
 
-	wiJobSystem::Wait();
+	wiJobSystem::DrainBarrier(wiJobSystem::Barrier());
 }
 void UpdateRenderData(GRAPHICSTHREAD threadID)
 {

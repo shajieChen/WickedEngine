@@ -1007,7 +1007,7 @@ namespace wiSceneSystem
 
 		RunTransformUpdateSystem(transforms);
 
-		wiJobSystem::Wait(); // dependecies
+		wiJobSystem::Barrier(); // dependecies
 
 		RunHierarchyUpdateSystem(hierarchy, transforms, layers);
 
@@ -1017,7 +1017,7 @@ namespace wiSceneSystem
 
 		RunImpostorUpdateSystem(impostors);
 
-		wiJobSystem::Wait(); // dependecies
+		wiJobSystem::Barrier(); // dependecies
 
 		RunObjectUpdateSystem(prev_transforms, transforms, meshes, materials, objects, aabb_objects, impostors, softbodies, bounds, waterPlane);
 
@@ -1033,7 +1033,8 @@ namespace wiSceneSystem
 
 		RunParticleUpdateSystem(transforms, meshes, emitters, hairs, dt);
 
-		wiJobSystem::Wait(); // dependecies
+		uint64_t barrier = wiJobSystem::Barrier(); // dependecies
+		wiJobSystem::DrainBarrier(barrier);
 
 		RunWeatherUpdateSystem(weathers, lights, weather);
 	}
@@ -1500,122 +1501,127 @@ namespace wiSceneSystem
 		float dt
 	)
 	{
-		for (size_t i = 0; i < animations.GetCount(); ++i)
-		{
-			AnimationComponent& animation = animations[i];
-			if (!animation.IsPlaying() && animation.timer == 0.0f)
+		// This needs serialized execution because there are dependencies enforced by component order!
+		wiJobSystem::Execute([&] {
+
+			for (size_t i = 0; i < animations.GetCount(); ++i)
 			{
-				continue;
-			}
-
-			for (const AnimationComponent::AnimationChannel& channel : animation.channels)
-			{
-				assert(channel.samplerIndex < animation.samplers.size());
-				const AnimationComponent::AnimationSampler& sampler = animation.samplers[channel.samplerIndex];
-
-				int keyLeft = 0;
-				int keyRight = 0;
-
-				if (sampler.keyframe_times.back() < animation.timer)
+				AnimationComponent& animation = animations[i];
+				if (!animation.IsPlaying() && animation.timer == 0.0f)
 				{
-					// Rightmost keyframe is already outside animation, so just snap to last keyframe:
-					keyLeft = keyRight = (int)sampler.keyframe_times.size() - 1;
-				}
-				else
-				{
-					// Search for the right keyframe (greater/equal to anim time):
-					while (sampler.keyframe_times[keyRight++] < animation.timer) {}
-					keyRight--;
-
-					// Left keyframe is just near right:
-					keyLeft = std::max(0, keyRight - 1);
+					continue;
 				}
 
-				float left = sampler.keyframe_times[keyLeft];
-
-				TransformComponent& transform = *transforms.GetComponent(channel.target);
-
-				if (sampler.mode == AnimationComponent::AnimationSampler::Mode::STEP || keyLeft == keyRight)
+				for (const AnimationComponent::AnimationChannel& channel : animation.channels)
 				{
-					// Nearest neighbor method (snap to left):
-					switch (channel.path)
+					assert(channel.samplerIndex < animation.samplers.size());
+					const AnimationComponent::AnimationSampler& sampler = animation.samplers[channel.samplerIndex];
+
+					int keyLeft = 0;
+					int keyRight = 0;
+
+					if (sampler.keyframe_times.back() < animation.timer)
 					{
-					case AnimationComponent::AnimationChannel::Path::TRANSLATION:
+						// Rightmost keyframe is already outside animation, so just snap to last keyframe:
+						keyLeft = keyRight = (int)sampler.keyframe_times.size() - 1;
+					}
+					else
 					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
-						transform.translation_local = ((const XMFLOAT3*)sampler.keyframe_data.data())[keyLeft];
+						// Search for the right keyframe (greater/equal to anim time):
+						while (sampler.keyframe_times[keyRight++] < animation.timer) {}
+						keyRight--;
+
+						// Left keyframe is just near right:
+						keyLeft = std::max(0, keyRight - 1);
 					}
-					break;
-					case AnimationComponent::AnimationChannel::Path::ROTATION:
+
+					float left = sampler.keyframe_times[keyLeft];
+
+					TransformComponent& transform = *transforms.GetComponent(channel.target);
+
+					if (sampler.mode == AnimationComponent::AnimationSampler::Mode::STEP || keyLeft == keyRight)
 					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 4);
-						transform.rotation_local = ((const XMFLOAT4*)sampler.keyframe_data.data())[keyLeft];
+						// Nearest neighbor method (snap to left):
+						switch (channel.path)
+						{
+						case AnimationComponent::AnimationChannel::Path::TRANSLATION:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
+							transform.translation_local = ((const XMFLOAT3*)sampler.keyframe_data.data())[keyLeft];
+						}
+						break;
+						case AnimationComponent::AnimationChannel::Path::ROTATION:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 4);
+							transform.rotation_local = ((const XMFLOAT4*)sampler.keyframe_data.data())[keyLeft];
+						}
+						break;
+						case AnimationComponent::AnimationChannel::Path::SCALE:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
+							transform.scale_local = ((const XMFLOAT3*)sampler.keyframe_data.data())[keyLeft];
+						}
+						break;
+						}
 					}
-					break;
-					case AnimationComponent::AnimationChannel::Path::SCALE:
+					else
 					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
-						transform.scale_local = ((const XMFLOAT3*)sampler.keyframe_data.data())[keyLeft];
+						// Linear interpolation method:
+						float right = sampler.keyframe_times[keyRight];
+						float t = (animation.timer - left) / (right - left);
+
+						switch (channel.path)
+						{
+						case AnimationComponent::AnimationChannel::Path::TRANSLATION:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
+							const XMFLOAT3* data = (const XMFLOAT3*)sampler.keyframe_data.data();
+							XMVECTOR vLeft = XMLoadFloat3(&data[keyLeft]);
+							XMVECTOR vRight = XMLoadFloat3(&data[keyRight]);
+							XMVECTOR vAnim = XMVectorLerp(vLeft, vRight, t);
+							XMStoreFloat3(&transform.translation_local, vAnim);
+						}
+						break;
+						case AnimationComponent::AnimationChannel::Path::ROTATION:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 4);
+							const XMFLOAT4* data = (const XMFLOAT4*)sampler.keyframe_data.data();
+							XMVECTOR vLeft = XMLoadFloat4(&data[keyLeft]);
+							XMVECTOR vRight = XMLoadFloat4(&data[keyRight]);
+							XMVECTOR vAnim = XMQuaternionSlerp(vLeft, vRight, t);
+							vAnim = XMQuaternionNormalize(vAnim);
+							XMStoreFloat4(&transform.rotation_local, vAnim);
+						}
+						break;
+						case AnimationComponent::AnimationChannel::Path::SCALE:
+						{
+							assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
+							const XMFLOAT3* data = (const XMFLOAT3*)sampler.keyframe_data.data();
+							XMVECTOR vLeft = XMLoadFloat3(&data[keyLeft]);
+							XMVECTOR vRight = XMLoadFloat3(&data[keyRight]);
+							XMVECTOR vAnim = XMVectorLerp(vLeft, vRight, t);
+							XMStoreFloat3(&transform.scale_local, vAnim);
+						}
+						break;
+						}
 					}
-					break;
-					}
+
+					transform.SetDirty();
+
 				}
-				else
+
+				if (animation.IsPlaying())
 				{
-					// Linear interpolation method:
-					float right = sampler.keyframe_times[keyRight];
-					float t = (animation.timer - left) / (right - left);
-
-					switch (channel.path)
-					{
-					case AnimationComponent::AnimationChannel::Path::TRANSLATION:
-					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
-						const XMFLOAT3* data = (const XMFLOAT3*)sampler.keyframe_data.data();
-						XMVECTOR vLeft = XMLoadFloat3(&data[keyLeft]);
-						XMVECTOR vRight = XMLoadFloat3(&data[keyRight]);
-						XMVECTOR vAnim = XMVectorLerp(vLeft, vRight, t);
-						XMStoreFloat3(&transform.translation_local, vAnim);
-					}
-					break;
-					case AnimationComponent::AnimationChannel::Path::ROTATION:
-					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 4);
-						const XMFLOAT4* data = (const XMFLOAT4*)sampler.keyframe_data.data();
-						XMVECTOR vLeft = XMLoadFloat4(&data[keyLeft]);
-						XMVECTOR vRight = XMLoadFloat4(&data[keyRight]);
-						XMVECTOR vAnim = XMQuaternionSlerp(vLeft, vRight, t);
-						vAnim = XMQuaternionNormalize(vAnim);
-						XMStoreFloat4(&transform.rotation_local, vAnim);
-					}
-					break;
-					case AnimationComponent::AnimationChannel::Path::SCALE:
-					{
-						assert(sampler.keyframe_data.size() == sampler.keyframe_times.size() * 3);
-						const XMFLOAT3* data = (const XMFLOAT3*)sampler.keyframe_data.data();
-						XMVECTOR vLeft = XMLoadFloat3(&data[keyLeft]);
-						XMVECTOR vRight = XMLoadFloat3(&data[keyRight]);
-						XMVECTOR vAnim = XMVectorLerp(vLeft, vRight, t);
-						XMStoreFloat3(&transform.scale_local, vAnim);
-					}
-					break;
-					}
+					animation.timer += dt;
 				}
 
-				transform.SetDirty();
-
+				if (animation.IsLooped() && animation.timer > animation.end)
+				{
+					animation.timer = animation.start;
+				}
 			}
 
-			if (animation.IsPlaying())
-			{
-				animation.timer += dt;
-			}
-
-			if (animation.IsLooped() && animation.timer > animation.end)
-			{
-				animation.timer = animation.start;
-			}
-		}
+		});
 	}
 	void RunTransformUpdateSystem(ComponentManager<TransformComponent>& transforms)
 	{
@@ -1632,28 +1638,31 @@ namespace wiSceneSystem
 		)
 	{
 		// This needs serialized execution because there are dependencies enforced by component order!
+		wiJobSystem::Execute([&] {
 
-		for (size_t i = 0; i < hierarchy.GetCount(); ++i)
-		{
-			const HierarchyComponent& parentcomponent = hierarchy[i];
-			Entity entity = hierarchy.GetEntity(i);
-
-			TransformComponent* transform_child = transforms.GetComponent(entity);
-			TransformComponent* transform_parent = transforms.GetComponent(parentcomponent.parentID);
-			if (transform_child != nullptr && transform_parent != nullptr)
+			for (size_t i = 0; i < hierarchy.GetCount(); ++i)
 			{
-				transform_child->UpdateTransform_Parented(*transform_parent, parentcomponent.world_parent_inverse_bind);
+				const HierarchyComponent& parentcomponent = hierarchy[i];
+				Entity entity = hierarchy.GetEntity(i);
+
+				TransformComponent* transform_child = transforms.GetComponent(entity);
+				TransformComponent* transform_parent = transforms.GetComponent(parentcomponent.parentID);
+				if (transform_child != nullptr && transform_parent != nullptr)
+				{
+					transform_child->UpdateTransform_Parented(*transform_parent, parentcomponent.world_parent_inverse_bind);
+				}
+
+
+				LayerComponent* layer_child = layers.GetComponent(entity);
+				LayerComponent* layer_parent = layers.GetComponent(parentcomponent.parentID);
+				if (layer_child != nullptr && layer_parent != nullptr)
+				{
+					layer_child->layerMask = parentcomponent.layerMask_bind & layer_parent->GetLayerMask();
+				}
+
 			}
 
-
-			LayerComponent* layer_child = layers.GetComponent(entity);
-			LayerComponent* layer_parent = layers.GetComponent(parentcomponent.parentID);
-			if (layer_child != nullptr && layer_parent != nullptr)
-			{
-				layer_child->layerMask = parentcomponent.layerMask_bind & layer_parent->GetLayerMask();
-			}
-
-		}
+		});
 	}
 	void RunArmatureUpdateSystem(
 		const ComponentManager<TransformComponent>& transforms,

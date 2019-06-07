@@ -3150,7 +3150,7 @@ void GraphicsDevice_DX11::ExecuteCommandLists()
 	{
 		if (i != GRAPHICSTHREAD_IMMEDIATE && commandLists[i] != nullptr)
 		{
-			deviceContexts[GRAPHICSTHREAD_IMMEDIATE]->ExecuteCommandList(commandLists[i], true);
+			deviceContexts[GRAPHICSTHREAD_IMMEDIATE]->ExecuteCommandList(commandLists[i], false);
 			commandLists[i]->Release();
 			commandLists[i] = nullptr;
 			deviceContexts[i]->ClearState();
@@ -3162,7 +3162,7 @@ void GraphicsDevice_DX11::FinishCommandList(GRAPHICSTHREAD thread)
 {
 	if (thread == GRAPHICSTHREAD_IMMEDIATE)
 		return;
-	deviceContexts[thread]->FinishCommandList(true, &commandLists[thread]);
+	deviceContexts[thread]->FinishCommandList(false, &commandLists[thread]);
 }
 
 void GraphicsDevice_DX11::WaitForGPU()

@@ -441,7 +441,7 @@ void EditorComponent::Load()
 			{
 				string fileName = ofn.lpstrFile;
 
-				loader->addLoadingFunction([=] {
+				loader->addLoadingTask([=] {
 					string extension = wiHelper::toUpper(wiHelper::GetExtensionFromFileName(fileName));
 
 					if (!extension.compare("WISCENE")) // engine-serialized

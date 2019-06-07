@@ -64,7 +64,7 @@ int LoadingScreen_BindLua::AddLoadingTask(lua_State* L)
 		LoadingScreen* loading = dynamic_cast<LoadingScreen*>(component);
 		if (loading != nullptr)
 		{
-			loading->addLoadingFunction(bind(&wiLua::RunText,wiLua::GetGlobal(),task));
+			loading->addLoadingTask(std::bind(&wiLua::RunText,wiLua::GetGlobal(),task));
 		}
 		else
 			wiLua::SError(L, "AddLoader(string taskScript) component is not a LoadingScreen!");
@@ -82,7 +82,7 @@ int LoadingScreen_BindLua::OnFinished(lua_State* L)
 		LoadingScreen* loading = dynamic_cast<LoadingScreen*>(component);
 		if (loading != nullptr)
 		{
-			loading->onFinished(bind(&wiLua::RunText, wiLua::GetGlobal(), task));
+			loading->onFinished(std::bind(&wiLua::RunText, wiLua::GetGlobal(), task));
 		}
 		else
 			wiLua::SError(L, "OnFinished(string taskScript) component is not a LoadingScreen!");

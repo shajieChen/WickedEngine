@@ -411,92 +411,97 @@ namespace wiPhysicsEngine
 			}
 		});
 
-		wiJobSystem::Wait();
+		wiJobSystem::Barrier();
 
-		// Perform internal simulation step:
-		dynamicsWorld->stepSimulation(dt, 10);
+		wiJobSystem::Execute([&] {
+			// Perform internal simulation step:
+			dynamicsWorld->stepSimulation(dt, 10);
 
-		// Feedback physics engine state to system:
-		for (int i = 0; i < dynamicsWorld->getCollisionObjectArray().size(); ++i)
-		{
-			btCollisionObject* collisionobject = dynamicsWorld->getCollisionObjectArray()[i];
-			int userIndex = collisionobject->getUserIndex();
-			Entity entity = *(Entity*)&userIndex;
-
-			btRigidBody* rigidbody = btRigidBody::upcast(collisionobject);
-			if (rigidbody != nullptr)
+			// Feedback physics engine state to system:
+			for (int i = 0; i < dynamicsWorld->getCollisionObjectArray().size(); ++i)
 			{
-				RigidBodyPhysicsComponent* physicscomponent = rigidbodies.GetComponent(entity);
-				if (physicscomponent == nullptr)
+				btCollisionObject* collisionobject = dynamicsWorld->getCollisionObjectArray()[i];
+				int userIndex = collisionobject->getUserIndex();
+				Entity entity = *(Entity*)&userIndex;
+
+				btRigidBody* rigidbody = btRigidBody::upcast(collisionobject);
+				if (rigidbody != nullptr)
 				{
-					dynamicsWorld->removeRigidBody(rigidbody);
-					i--;
-					continue;
-				}
-
-				// Feedback non-kinematic objects to system:
-				if(!physicscomponent->IsKinematic())
-				{
-					TransformComponent& transform = *transforms.GetComponent(entity);
-
-					btMotionState* motionState = rigidbody->getMotionState();
-					btTransform physicsTransform;
-
-					motionState->getWorldTransform(physicsTransform);
-					btVector3 T = physicsTransform.getOrigin();
-					btQuaternion R = physicsTransform.getRotation();
-
-					transform.translation_local = XMFLOAT3(T.x(), T.y(), T.z());
-					transform.rotation_local = XMFLOAT4(R.x(), R.y(), R.z(), R.w());
-					transform.SetDirty();
-				}
-			}
-			else
-			{
-				btSoftBody* softbody = btSoftBody::upcast(collisionobject);
-
-				if (softbody != nullptr)
-				{
-					SoftBodyPhysicsComponent* physicscomponent = softbodies.GetComponent(entity);
+					RigidBodyPhysicsComponent* physicscomponent = rigidbodies.GetComponent(entity);
 					if (physicscomponent == nullptr)
 					{
-						((btSoftRigidDynamicsWorld*)dynamicsWorld)->removeSoftBody(softbody);
+						dynamicsWorld->removeRigidBody(rigidbody);
 						i--;
 						continue;
 					}
 
-					MeshComponent& mesh = *meshes.GetComponent(entity);
-
-					// System mesh aabb will be queried from physics engine soft body:
-					btVector3 aabb_min;
-					btVector3 aabb_max;
-					softbody->getAabb(aabb_min, aabb_max);
-					mesh.aabb = AABB(XMFLOAT3(aabb_min.x(), aabb_min.y(), aabb_min.z()), XMFLOAT3(aabb_max.x(), aabb_max.y(), aabb_max.z()));
-
-					// Soft body simulation nodes will update graphics mesh:
-					for (size_t ind = 0; ind < mesh.vertex_positions.size(); ++ind)
+					// Feedback non-kinematic objects to system:
+					if (!physicscomponent->IsKinematic())
 					{
-						uint32_t physicsInd = physicscomponent->graphicsToPhysicsVertexMapping[ind];
-						float weight = physicscomponent->weights[physicsInd];
+						TransformComponent& transform = *transforms.GetComponent(entity);
 
-						btSoftBody::Node& node = softbody->m_nodes[physicsInd];
+						btMotionState* motionState = rigidbody->getMotionState();
+						btTransform physicsTransform;
 
-						XMFLOAT3& position = mesh.vertex_positions[ind];
-						position.x = node.m_x.getX();
-						position.y = node.m_x.getY();
-						position.z = node.m_x.getZ();
+						motionState->getWorldTransform(physicsTransform);
+						btVector3 T = physicsTransform.getOrigin();
+						btQuaternion R = physicsTransform.getRotation();
 
-						if (!mesh.vertex_normals.empty())
+						transform.translation_local = XMFLOAT3(T.x(), T.y(), T.z());
+						transform.rotation_local = XMFLOAT4(R.x(), R.y(), R.z(), R.w());
+						transform.SetDirty();
+					}
+				}
+				else
+				{
+					btSoftBody* softbody = btSoftBody::upcast(collisionobject);
+
+					if (softbody != nullptr)
+					{
+						SoftBodyPhysicsComponent* physicscomponent = softbodies.GetComponent(entity);
+						if (physicscomponent == nullptr)
 						{
-							XMFLOAT3& normal = mesh.vertex_normals[ind];
-							normal.x = -node.m_n.getX();
-							normal.y = -node.m_n.getY();
-							normal.z = -node.m_n.getZ();
+							((btSoftRigidDynamicsWorld*)dynamicsWorld)->removeSoftBody(softbody);
+							i--;
+							continue;
+						}
+
+						MeshComponent& mesh = *meshes.GetComponent(entity);
+
+						// System mesh aabb will be queried from physics engine soft body:
+						btVector3 aabb_min;
+						btVector3 aabb_max;
+						softbody->getAabb(aabb_min, aabb_max);
+						mesh.aabb = AABB(XMFLOAT3(aabb_min.x(), aabb_min.y(), aabb_min.z()), XMFLOAT3(aabb_max.x(), aabb_max.y(), aabb_max.z()));
+
+						// Soft body simulation nodes will update graphics mesh:
+						for (size_t ind = 0; ind < mesh.vertex_positions.size(); ++ind)
+						{
+							uint32_t physicsInd = physicscomponent->graphicsToPhysicsVertexMapping[ind];
+							float weight = physicscomponent->weights[physicsInd];
+
+							btSoftBody::Node& node = softbody->m_nodes[physicsInd];
+
+							XMFLOAT3& position = mesh.vertex_positions[ind];
+							position.x = node.m_x.getX();
+							position.y = node.m_x.getY();
+							position.z = node.m_x.getZ();
+
+							if (!mesh.vertex_normals.empty())
+							{
+								XMFLOAT3& normal = mesh.vertex_normals[ind];
+								normal.x = -node.m_n.getX();
+								normal.y = -node.m_n.getY();
+								normal.z = -node.m_n.getZ();
+							}
 						}
 					}
 				}
 			}
-		}
+
+		});
+
+		wiJobSystem::Barrier();
 
 		wiProfiler::EndRange(); // Physics
 	}

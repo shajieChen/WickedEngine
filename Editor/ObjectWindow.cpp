@@ -508,7 +508,7 @@ ObjectWindow::ObjectWindow(EditorComponent* editor) : editor(editor)
 				});
 			}
 		}
-		wiJobSystem::Wait();
+		wiJobSystem::DrainBarrier(wiJobSystem::Barrier());
 
 		for (auto& x : gen_objects)
 		{

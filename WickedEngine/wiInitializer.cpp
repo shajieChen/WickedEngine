@@ -9,11 +9,12 @@ using namespace std;
 namespace wiInitializer
 {
 	bool initializationStarted = false;
+	uint64_t barrier = 0;
 
 	void InitializeComponentsImmediate()
 	{
 		InitializeComponentsAsync();
-		wiJobSystem::Wait();
+		wiJobSystem::DrainBarrier(barrier);
 	}
 	void InitializeComponentsAsync()
 	{
@@ -36,11 +37,12 @@ namespace wiInitializer
 		wiJobSystem::Execute([] { wiGPUSortLib::LoadShaders(); });
 		wiJobSystem::Execute([] { wiGPUBVH::LoadShaders(); });
 		wiJobSystem::Execute([] { wiPhysicsEngine::Initialize(); });
+		barrier = wiJobSystem::Barrier();
 
 	}
 
 	bool IsInitializeFinished()
 	{
-		return initializationStarted && !wiJobSystem::IsBusy();
+		return initializationStarted && wiJobSystem::IsBarrierReached(barrier);
 	}
 }

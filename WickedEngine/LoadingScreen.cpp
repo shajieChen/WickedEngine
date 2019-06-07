@@ -1,42 +1,35 @@
 #include "LoadingScreen.h"
 #include "MainComponent.h"
+#include "wiJobSystem.h"
 
 using namespace std;
 
 LoadingScreen::LoadingScreen() : RenderPath2D()
 {
-	loaders.clear();
-	finish = nullptr;
+	// Create a separate job queue for the loading screen so that it can run independently from other job system queues.
+	jobQueueID = wiJobSystem::Create_JobQueue();
 }
-
-
 LoadingScreen::~LoadingScreen()
 {
+	wiJobSystem::Delete_JobQueue(jobQueueID);
 }
 
-bool LoadingScreen::isActive()
+bool LoadingScreen::isBusy()
 {
-	for (LoaderTask& x : loaders)
-	{
-		if (x.active.load())
-		{
-			return true;
-		}
-	}
-	return false;
+	return !wiJobSystem::IsBarrierReached(barrier, jobQueueID);
 }
 
-void LoadingScreen::addLoadingFunction(function<void()> loadingFunction)
+void LoadingScreen::addLoadingTask(const function<void()>& task)
 {
-	if (loadingFunction != nullptr)
+	if (task != nullptr)
 	{
-		loaders.push_back(LoaderTask(loadingFunction));
+		tasks.push_back(task);
 	}
 }
 
 void LoadingScreen::addLoadingComponent(RenderPath* component, MainComponent* main, float fadeSeconds, const wiColor& fadeColor)
 {
-	addLoadingFunction([=] {
+	addLoadingTask([=] {
 		component->Load();
 	});
 	onFinished([=] {
@@ -47,67 +40,30 @@ void LoadingScreen::addLoadingComponent(RenderPath* component, MainComponent* ma
 void LoadingScreen::onFinished(function<void()> finishFunction)
 {
 	if (finishFunction != nullptr)
+	{
 		finish = finishFunction;
-}
-
-void LoadingScreen::waitForFinish()
-{
-	worker.join();
-	if (finish != nullptr)
-		finish();
-}
-
-void LoadingScreen::doLoadingTasks()
-{
-	std::vector<thread> loaderThreads(0);
-
-	for (LoaderTask& x : loaders)
-	{
-		x.active.store(true);
-		loaderThreads.push_back(thread(x.functionBody));
 	}
-
-	int i = 0;
-	for (thread& x : loaderThreads)
-	{
-		x.join();
-		loaders[i].active.store(false);
-		i++;
-	}
-}
-
-int LoadingScreen::getPercentageComplete()
-{
-	const int numberOfLoaders = (int)loaders.size();
-	int completed = 0;
-
-	for (LoaderTask& x : loaders)
-	{
-		if (!x.active.load())
-		{
-			completed++;
-		}
-	}
-
-	return (int)(((float)completed / (float)numberOfLoaders)*100.f);
-}
-
-void LoadingScreen::Unload()
-{
-	RenderPath2D::Unload();
 }
 
 void LoadingScreen::Start()
 {
-	worker = thread(&LoadingScreen::doLoadingTasks, this);
-	thread(&LoadingScreen::waitForFinish, this).detach();
+	barrier = ~0; // mark as always working
+	for (auto& task : tasks)
+	{
+		wiJobSystem::Execute(task, jobQueueID); // add loading tasks to job queue
+	}
+	wiJobSystem::Barrier(jobQueueID); // tasks must complete before moving on
+	wiJobSystem::Execute(finish, jobQueueID); // add finish task to job queue
+	barrier = wiJobSystem::Barrier(jobQueueID); // mark this as the end of loading screen
+	// all of the above are async calls, this does not block!
 
 	RenderPath2D::Start();
 }
 
 void LoadingScreen::Stop()
 {
-	loaders.clear();
+	wiJobSystem::DrainBarrier(barrier, jobQueueID); // drain all work here, just in case it wasn't completed yet
+	tasks.clear();
 	finish = nullptr;
 
 	RenderPath2D::Stop();

@@ -225,7 +225,7 @@ void TestsRenderer::RunJobSystemTest()
 		wiJobSystem::Execute([]{ wiHelper::Spin(100); });
 		wiJobSystem::Execute([]{ wiHelper::Spin(100); });
 		wiJobSystem::Execute([]{ wiHelper::Spin(100); });
-		wiJobSystem::Wait();
+		wiJobSystem::DrainBarrier(wiJobSystem::Barrier());
 		double time = timer.elapsed();
 		ss << "wiJobSystem::Execute() took " << time << " milliseconds" << std::endl;
 	}
@@ -252,7 +252,7 @@ void TestsRenderer::RunJobSystemTest()
 		wiJobSystem::Dispatch(itemCount, 1000, [&](wiJobDispatchArgs args) {
 			dataSet[args.jobIndex].UpdateCamera();
 		});
-		wiJobSystem::Wait();
+		wiJobSystem::DrainBarrier(wiJobSystem::Barrier());
 		double time = timer.elapsed();
 		ss << "wiJobSystem::Dispatch() took " << time << " milliseconds" << std::endl;
 	}
