@@ -3,10 +3,19 @@ branches:
   only:
   - master
   - appveyor
-image: Visual Studio 2019
+image: Visual Studio 2017
 configuration: Release
+
+# There is a problem with Appveyor when it tries to build this project with Visual Studio 2019, so a workaround build script will be used instead
+#build:
+#  project: WickedEngine.sln
+#  parallel: true
+#  verbosity: minimal
+
+# Appveyor Visual Studio 2019 workaround:
 build_script:
   - msbuild "C:\projects\wickedengine\WickedEngine.sln" /m /verbosity:minimal /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+
 platform:
   - x64
   - Win32
