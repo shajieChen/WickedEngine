@@ -1803,6 +1803,54 @@ namespace wiGraphics
 		hr = device->CreateCommandSignature(&cmd_desc, nullptr, __uuidof(ID3D12CommandSignature), (void**)&drawIndexedInstancedIndirectCommandSignature);
 		assert(SUCCEEDED(hr));
 
+		// GPU Queries:
+		{
+			D3D12_QUERY_HEAP_DESC queryheapdesc = {};
+			queryheapdesc.NodeMask = 0;
+
+			for (UINT i = 0; i < timestamp_query_count; ++i)
+			{
+				free_timestampqueries.push_back(i);
+			}
+			queryheapdesc.Count = timestamp_query_count;
+			queryheapdesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+			hr = device->CreateQueryHeap(&queryheapdesc, __uuidof(ID3D12QueryHeap), (void**)&querypool_timestamp);
+			assert(SUCCEEDED(hr));
+
+			for (UINT i = 0; i < occlusion_query_count; ++i)
+			{
+				free_occlusionqueries.push_back(i);
+			}
+			queryheapdesc.Count = occlusion_query_count;
+			queryheapdesc.Type = D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+			hr = device->CreateQueryHeap(&queryheapdesc, __uuidof(ID3D12QueryHeap), (void**)&querypool_occlusion);
+			assert(SUCCEEDED(hr));
+
+
+			D3D12MA::ALLOCATION_DESC allocationDesc = {};
+			allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK;
+
+			hr = allocator->CreateResource(
+				&allocationDesc,
+				&CD3DX12_RESOURCE_DESC::Buffer(timestamp_query_count * sizeof(UINT64)),
+				D3D12_RESOURCE_STATE_COPY_DEST,
+				nullptr,
+				&allocation_querypool_timestamp_readback,
+				IID_PPV_ARGS(&querypool_timestamp_readback)
+			);
+			assert(SUCCEEDED(hr));
+
+			hr = allocator->CreateResource(
+				&allocationDesc,
+				&CD3DX12_RESOURCE_DESC::Buffer(occlusion_query_count * sizeof(UINT64)),
+				D3D12_RESOURCE_STATE_COPY_DEST,
+				nullptr,
+				&allocation_querypool_occlusion_readback,
+				IID_PPV_ARGS(&querypool_occlusion_readback)
+			);
+			assert(SUCCEEDED(hr));
+		}
+
 		wiBackLog::post("Created GraphicsDevice_DX12");
 	}
 	GraphicsDevice_DX12::~GraphicsDevice_DX12()
@@ -1850,6 +1898,13 @@ namespace wiGraphics
 
 		SAFE_DELETE(bufferUploader);
 		SAFE_DELETE(textureUploader);
+
+		SAFE_RELEASE(querypool_timestamp);
+		SAFE_RELEASE(querypool_occlusion);
+		SAFE_RELEASE(querypool_timestamp_readback);
+		SAFE_RELEASE(querypool_occlusion_readback);
+		SAFE_RELEASE(allocation_querypool_timestamp_readback);
+		SAFE_RELEASE(allocation_querypool_occlusion_readback);
 
 		SAFE_RELEASE(directQueue);
 		SAFE_RELEASE(allocator);
@@ -2376,13 +2431,46 @@ namespace wiGraphics
 	}
 	HRESULT GraphicsDevice_DX12::CreateQuery(const GPUQueryDesc *pDesc, GPUQuery *pQuery)
 	{
-		// TODO!
-		//DestroyQuery(pQuery);
-		//pQuery->Register(this);
+		DestroyQuery(pQuery);
+		pQuery->Register(this);
 
 		HRESULT hr = E_FAIL;
 
 		pQuery->desc = *pDesc;
+
+		uint32_t query_index;
+
+		switch (pDesc->Type)
+		{
+		case GPU_QUERY_TYPE_TIMESTAMP:
+			if (free_timestampqueries.pop_front(query_index))
+			{
+				pQuery->resource = (wiCPUHandle)query_index;
+				hr = S_OK;
+			}
+			else
+			{
+				assert(0);
+			}
+			break;
+		case GPU_QUERY_TYPE_TIMESTAMP_DISJOINT:
+			hr = S_OK;
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION:
+		case GPU_QUERY_TYPE_OCCLUSION_PREDICATE:
+			if (free_occlusionqueries.pop_front(query_index))
+			{
+				pQuery->resource = (wiCPUHandle)query_index;
+				hr = S_OK;
+			}
+			else
+			{
+				assert(0);
+			}
+			break;
+		}
+
+		assert(SUCCEEDED(hr));
 
 		return hr;
 	}
@@ -2911,7 +2999,19 @@ namespace wiGraphics
 	}
 	void GraphicsDevice_DX12::DestroyQuery(GPUQuery *pQuery)
 	{
-
+		if (pQuery != nullptr)
+		{
+			switch (pQuery->desc.Type)
+			{
+			case GPU_QUERY_TYPE_TIMESTAMP:
+				DeferredDestroy({ DestroyItem::QUERY_TIMESTAMP, FRAMECOUNT, pQuery->resource });
+				break;
+			case GPU_QUERY_TYPE_OCCLUSION:
+			case GPU_QUERY_TYPE_OCCLUSION_PREDICATE:
+				DeferredDestroy({ DestroyItem::QUERY_OCCLUSION, FRAMECOUNT, pQuery->resource });
+				break;
+			}
+		}
 	}
 	void GraphicsDevice_DX12::DestroyPipelineState(PipelineState* pso)
 	{
@@ -3103,6 +3203,12 @@ namespace wiGraphics
 					break;
 				case DestroyItem::PIPELINE:
 					((ID3D12PipelineState*)item.handle)->Release();
+					break;
+				case DestroyItem::QUERY_TIMESTAMP:
+					free_timestampqueries.push_back((UINT)item.handle);
+					break;
+				case DestroyItem::QUERY_OCCLUSION:
+					free_timestampqueries.push_back((UINT)item.handle);
 					break;
 				default:
 					break;
@@ -3974,12 +4080,71 @@ namespace wiGraphics
 	}
 	void GraphicsDevice_DX12::QueryBegin(const GPUQuery *query, CommandList cmd)
 	{
+		switch (query->desc.Type)
+		{
+		case GPU_QUERY_TYPE_TIMESTAMP:
+			GetDirectCommandList(cmd)->BeginQuery(querypool_timestamp, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)query->resource);
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION_PREDICATE:
+			GetDirectCommandList(cmd)->BeginQuery(querypool_occlusion, D3D12_QUERY_TYPE_BINARY_OCCLUSION, (UINT)query->resource);
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION:
+			GetDirectCommandList(cmd)->BeginQuery(querypool_occlusion, D3D12_QUERY_TYPE_OCCLUSION, (UINT)query->resource);
+			break;
+		}
 	}
 	void GraphicsDevice_DX12::QueryEnd(const GPUQuery *query, CommandList cmd)
 	{
+		switch (query->desc.Type)
+		{
+		case GPU_QUERY_TYPE_TIMESTAMP:
+			GetDirectCommandList(cmd)->EndQuery(querypool_timestamp, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)query->resource);
+			GetDirectCommandList(cmd)->ResolveQueryData(querypool_timestamp, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)query->resource, 1, querypool_timestamp_readback, (UINT64)query->resource * sizeof(UINT64));
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION_PREDICATE:
+			GetDirectCommandList(cmd)->EndQuery(querypool_occlusion, D3D12_QUERY_TYPE_BINARY_OCCLUSION, (UINT)query->resource);
+			GetDirectCommandList(cmd)->ResolveQueryData(querypool_occlusion, D3D12_QUERY_TYPE_BINARY_OCCLUSION, (UINT)query->resource, 1, querypool_occlusion_readback, (UINT64)query->resource * sizeof(UINT64));
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION:
+			GetDirectCommandList(cmd)->EndQuery(querypool_occlusion, D3D12_QUERY_TYPE_OCCLUSION, (UINT)query->resource);
+			GetDirectCommandList(cmd)->ResolveQueryData(querypool_occlusion, D3D12_QUERY_TYPE_OCCLUSION, (UINT)query->resource, 1, querypool_occlusion_readback, (UINT64)query->resource * sizeof(UINT64));
+			break;
+		}
 	}
 	bool GraphicsDevice_DX12::QueryRead(const GPUQuery* query, GPUQueryResult* result)
 	{
+		D3D12_RANGE range;
+		range.Begin = (SIZE_T)query->resource * sizeof(SIZE_T);
+		range.End = range.Begin + sizeof(UINT64);
+		D3D12_RANGE nullrange = {};
+		void* data = nullptr;
+
+		switch (query->desc.Type)
+		{
+		case GPU_QUERY_TYPE_EVENT:
+			assert(0); // not implemented yet
+			break;
+		case GPU_QUERY_TYPE_TIMESTAMP:
+			querypool_timestamp_readback->Map(0, &range, &data);
+			result->result_timestamp = (*(UINT64*)data + (UINT64)range.Begin);
+			querypool_timestamp_readback->Unmap(0, &nullrange);
+			break;
+		case GPU_QUERY_TYPE_TIMESTAMP_DISJOINT:
+			directQueue->GetTimestampFrequency(&result->result_timestamp_frequency);
+			result->result_disjoint = FALSE;
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION_PREDICATE:
+			querypool_occlusion_readback->Map(0, &range, &data);
+			result->result_passed = (BOOL)(*(UINT64*)data + (UINT64)range.Begin);
+			querypool_occlusion_readback->Unmap(0, &nullrange);
+			break;
+		case GPU_QUERY_TYPE_OCCLUSION:
+			querypool_occlusion_readback->Map(0, &range, &data);
+			result->result_passed_sample_count = (*(UINT64*)data + (UINT64)range.Begin);
+			querypool_occlusion_readback->Unmap(0, &nullrange);
+			break;
+		}
+
 		return true;
 	}
 	void GraphicsDevice_DX12::Barrier(const GPUBarrier* barriers, UINT numBarriers, CommandList cmd)
