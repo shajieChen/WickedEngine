@@ -72,9 +72,12 @@ namespace wiScene
 		void ApplyTransform();
 		void ClearTransform();
 		void Translate(const XMFLOAT3& value);
+		void Translate(const XMVECTOR& value);
 		void RotateRollPitchYaw(const XMFLOAT3& value);
 		void Rotate(const XMFLOAT4& quaternion);
+		void Rotate(const XMVECTOR& quaternion);
 		void Scale(const XMFLOAT3& value);
+		void Scale(const XMVECTOR& value);
 		void MatrixTransform(const XMFLOAT4X4& matrix);
 		void MatrixTransform(const XMMATRIX& matrix);
 		void Lerp(const TransformComponent& a, const TransformComponent& b, float t);
@@ -1043,6 +1046,45 @@ namespace wiScene
 		void Serialize(wiArchive& archive, uint32_t seed = 0);
 	};
 
+	struct ConstraintComponent
+	{
+		enum FLAGS
+		{
+			EMPTY = 0,
+			DISABLED = 1 << 0,
+			LIMIT_AXIS = 1 << 1,
+			LIMIT_ANGLE_MIN = 1 << 2,
+			LIMIT_ANGLE_MAX = 1 << 3,
+		};
+		uint32_t _flags = EMPTY;
+
+		enum TYPE
+		{
+			HINGE,	// limit rotation angle around axis
+			SPHERE,	// limit rotation angle relative to an axis
+		};
+		TYPE type = HINGE;
+
+		XMFLOAT3 axis_local = XMFLOAT3(0, 0, 0);
+		float angle_min = 0;
+		float angle_max = 0;
+
+		// Non-serialized attributes:
+		XMFLOAT3 axis_world = XMFLOAT3(0, 0, 0);
+
+		inline void SetDisabled(bool value = true) { if (value) { _flags |= DISABLED; } else { _flags &= ~DISABLED; } }
+		inline void SetLimitAxis(bool value = true) { if (value) { _flags |= LIMIT_AXIS; } else { _flags &= ~LIMIT_AXIS; } }
+		inline void SetLimitAngleMin(bool value = true) { if (value) { _flags |= LIMIT_ANGLE_MIN; } else { _flags &= ~LIMIT_ANGLE_MIN; } }
+		inline void SetLimitAngleMax(bool value = true) { if (value) { _flags |= LIMIT_ANGLE_MAX; } else { _flags &= ~LIMIT_ANGLE_MAX; } }
+
+		inline bool IsDisabled() const { return _flags & DISABLED; }
+		inline bool IsLimitAxis() const { return _flags & LIMIT_AXIS; }
+		inline bool IsLimitAngleMin() const { return _flags & LIMIT_ANGLE_MIN; }
+		inline bool IsLimitAngleMax() const { return _flags & LIMIT_ANGLE_MAX; }
+
+		void Serialize(wiArchive& archive, uint32_t seed = 0);
+	};
+
 	struct Scene
 	{
 		wiECS::ComponentManager<NameComponent> names;
@@ -1073,6 +1115,7 @@ namespace wiScene
 		wiECS::ComponentManager<SoundComponent> sounds;
 		wiECS::ComponentManager<InverseKinematicsComponent> inverse_kinematics;
 		wiECS::ComponentManager<SpringComponent> springs;
+		wiECS::ComponentManager<ConstraintComponent> constraints;
 
 		// Non-serialized attributes:
 		AABB bounds;
@@ -1176,12 +1219,14 @@ namespace wiScene
 		wiJobSystem::context& ctx,
 		const wiECS::ComponentManager<HierarchyComponent>& hierarchy,
 		wiECS::ComponentManager<TransformComponent>& transforms,
+		wiECS::ComponentManager<ConstraintComponent>& constraints,
 		wiECS::ComponentManager<LayerComponent>& layers
 	);
 	void RunSpringUpdateSystem(
 		wiJobSystem::context& ctx,
 		const WeatherComponent& weather,
 		const wiECS::ComponentManager<HierarchyComponent>& hierarchy,
+		const wiECS::ComponentManager<ConstraintComponent>& constraints,
 		wiECS::ComponentManager<TransformComponent>& transforms,
 		wiECS::ComponentManager<SpringComponent>& springs,
 		float dt
@@ -1190,6 +1235,7 @@ namespace wiScene
 		wiJobSystem::context& ctx,
 		const wiECS::ComponentManager<InverseKinematicsComponent>& inverse_kinematics,
 		const wiECS::ComponentManager<HierarchyComponent>& hierarchy,
+		const wiECS::ComponentManager<ConstraintComponent>& constraints,
 		wiECS::ComponentManager<TransformComponent>& transforms
 	);
 	void RunArmatureUpdateSystem(

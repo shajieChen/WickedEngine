@@ -231,6 +231,29 @@ void TestsRenderer::Load()
 				ik.iteration_count = 5; // precision of ik simulation
 				ik.target = CreateEntity();
 				scene.transforms.Create(ik.target);
+
+				const HierarchyComponent* hier = scene.hierarchy.GetComponent(ik_entity);
+				if (hier != nullptr)
+				{
+					// lower arm:
+					ConstraintComponent& constraint1 = scene.constraints.Create(hier->parentID);
+					constraint1.SetLimitAxis(true);
+					//constraint1.SetLimitAngleMin(true);
+					//constraint1.SetLimitAngleMax(true);
+					constraint1.axis_local = XMFLOAT3(1, 0, 0);
+					constraint1.angle_min = XM_PI * 0.01f;
+					constraint1.angle_max = XM_PI * 0.2f;
+
+					//// upper arm:
+					//ConstraintComponent& constraint2 = scene.constraints.Create(scene.hierarchy.GetComponent(hier->parentID)->parentID);
+					//constraint2.SetLimitAxis(true);
+					//constraint2.SetLimitAngleMin(true);
+					//constraint2.SetLimitAngleMax(true);
+					////constraint2.type = ConstraintComponent::SPHERE;
+					//constraint2.axis_local = XMFLOAT3(1, 0, 0);
+					//constraint2.angle_min = XM_PI * 0.01f;
+					//constraint2.angle_max = XM_PI * 0.2f;
+				}
 			}
 
 			// Play walk animation:
@@ -295,6 +318,21 @@ void TestsRenderer::Update(float dt)
 			pp.color = XMFLOAT4(1, 0, 0, 1);
 			pp.size = 0.1f;
 			wiRenderer::DrawPoint(pp);
+
+			for (size_t i = 0; i < scene.constraints.GetCount(); ++i)
+			{
+				const ConstraintComponent& constraint = scene.constraints[i];
+				Entity entity = scene.constraints.GetEntity(i);
+				const TransformComponent* transform = scene.transforms.GetComponent(entity);
+				XMVECTOR P = transform->GetPositionV();
+				XMVECTOR N = XMLoadFloat3(&constraint.axis_world);
+				XMVECTOR E = P + N;
+				wiRenderer::RenderableLine line;
+				XMStoreFloat3(&line.start, P);
+				XMStoreFloat3(&line.end, E);
+				line.color = XMFLOAT4(1, 0, 1, 1);
+				wiRenderer::DrawLine(line);
+			}
 		}
 	}
 	break;

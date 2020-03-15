@@ -25,6 +25,7 @@ namespace wiScene
 	struct SoundComponent;
 	struct InverseKinematicsComponent;
 	struct SpringComponent;
+	struct ConstraintComponent;
 	struct Scene;
 
 	class wiEmittedParticle; // todo: rename

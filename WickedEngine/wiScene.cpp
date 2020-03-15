@@ -102,6 +102,12 @@ namespace wiScene
 		translation_local.y += value.y;
 		translation_local.z += value.z;
 	}
+	void TransformComponent::Translate(const XMVECTOR& value)
+	{
+		XMFLOAT3 translation;
+		XMStoreFloat3(&translation, value);
+		Translate(translation);
+	}
 	void TransformComponent::RotateRollPitchYaw(const XMFLOAT3& value)
 	{
 		SetDirty();
@@ -127,12 +133,24 @@ namespace wiScene
 		result = XMQuaternionNormalize(result);
 		XMStoreFloat4(&rotation_local, result);
 	}
+	void TransformComponent::Rotate(const XMVECTOR& quaternion)
+	{
+		XMFLOAT4 quat;
+		XMStoreFloat4(&quat, quaternion);
+		Rotate(quat);
+	}
 	void TransformComponent::Scale(const XMFLOAT3& value)
 	{
 		SetDirty();
 		scale_local.x *= value.x;
 		scale_local.y *= value.y;
 		scale_local.z *= value.z;
+	}
+	void TransformComponent::Scale(const XMVECTOR& value)
+	{
+		XMFLOAT3 scale;
+		XMStoreFloat3(&scale, value);
+		Scale(scale);
 	}
 	void TransformComponent::MatrixTransform(const XMFLOAT4X4& matrix)
 	{
@@ -1024,11 +1042,11 @@ namespace wiScene
 
 		wiJobSystem::Wait(ctx); // dependecies
 
-		RunHierarchyUpdateSystem(ctx, hierarchy, transforms, layers);
+		RunHierarchyUpdateSystem(ctx, hierarchy, transforms, constraints, layers);
 
-		RunSpringUpdateSystem(ctx, weather, hierarchy, transforms, springs, dt);
+		RunSpringUpdateSystem(ctx, weather, hierarchy, constraints, transforms, springs, dt);
 
-		RunInverseKinematicsUpdateSystem(ctx, inverse_kinematics, hierarchy, transforms);
+		RunInverseKinematicsUpdateSystem(ctx, inverse_kinematics, hierarchy, constraints, transforms);
 
 		RunArmatureUpdateSystem(ctx, transforms, armatures);
 
@@ -1090,6 +1108,7 @@ namespace wiScene
 		sounds.Clear();
 		inverse_kinematics.Clear();
 		springs.Clear();
+		constraints.Clear();
 	}
 	void Scene::Merge(Scene& other)
 	{
@@ -1121,6 +1140,7 @@ namespace wiScene
 		sounds.Merge(other.sounds);
 		inverse_kinematics.Merge(other.inverse_kinematics);
 		springs.Merge(other.springs);
+		constraints.Merge(other.constraints);
 
 		bounds = AABB::Merge(bounds, other.bounds);
 	}
@@ -1156,6 +1176,7 @@ namespace wiScene
 		sounds.Remove(entity);
 		inverse_kinematics.Remove(entity);
 		springs.Remove(entity);
+		constraints.Remove(entity);
 	}
 	Entity Scene::Entity_FindByName(const std::string& name)
 	{
@@ -1670,6 +1691,7 @@ namespace wiScene
 		wiJobSystem::context& ctx,
 		const ComponentManager<HierarchyComponent>& hierarchy,
 		ComponentManager<TransformComponent>& transforms,
+		ComponentManager<ConstraintComponent>& constraints,
 		ComponentManager<LayerComponent>& layers
 		)
 	{
@@ -1685,6 +1707,14 @@ namespace wiScene
 			if (transform_child != nullptr && transform_parent != nullptr)
 			{
 				transform_child->UpdateTransform_Parented(*transform_parent);
+
+				ConstraintComponent* constraint = constraints.GetComponent(entity);
+				if (constraint != nullptr)
+				{
+					XMVECTOR axis = XMLoadFloat3(&constraint->axis_local);
+					axis = XMVector3TransformNormal(axis, XMLoadFloat4x4(&transform_parent->world));
+					XMStoreFloat3(&constraint->axis_world, axis);
+				}
 			}
 
 
@@ -1701,6 +1731,7 @@ namespace wiScene
 		wiJobSystem::context& ctx,
 		const WeatherComponent& weather,
 		const ComponentManager<HierarchyComponent>& hierarchy,
+		const ComponentManager<ConstraintComponent>& constraints,
 		ComponentManager<TransformComponent>& transforms,
 		ComponentManager<SpringComponent>& springs,
 		float dt
@@ -1777,10 +1808,10 @@ namespace wiScene
 				// Parent rotation to point to new child position:
 				const XMVECTOR dir_parent_to_child = XMVector3Normalize(parent_to_child);
 				const XMVECTOR dir_parent_to_target = XMVector3Normalize(parent_to_target);
-				const XMVECTOR axis = XMVector3Normalize(XMVector3Cross(dir_parent_to_child, dir_parent_to_target));
+				const XMVECTOR axis = XMVector3Cross(dir_parent_to_child, dir_parent_to_target);
 				const float angle = XMVectorGetX(XMVectorACos(XMVector3Dot(dir_parent_to_child, dir_parent_to_target))); // don't use std::acos!
 				XMFLOAT4 quaternion;
-				XMStoreFloat4(&quaternion, XMQuaternionNormalize(XMQuaternionRotationAxis(axis, angle)));
+				XMStoreFloat4(&quaternion, XMQuaternionNormalize(XMQuaternionRotationNormal(axis, angle)));
 				TransformComponent saved_parent = *parent_transform;
 				saved_parent.ApplyTransform();
 				saved_parent.Rotate(quaternion);
@@ -1798,6 +1829,7 @@ namespace wiScene
 		wiJobSystem::context& ctx,
 		const ComponentManager<InverseKinematicsComponent>& inverse_kinematics,
 		const ComponentManager<HierarchyComponent>& hierarchy,
+		const ComponentManager<ConstraintComponent>& constraints,
 		ComponentManager<TransformComponent>& transforms
 	)
 	{
@@ -1837,15 +1869,74 @@ namespace wiScene
 					const XMVECTOR parent_pos = parent_transform->GetPositionV();
 					const XMVECTOR dir_parent_to_ik = XMVector3Normalize(transform->GetPositionV() - parent_pos);
 					const XMVECTOR dir_parent_to_target = XMVector3Normalize(target_pos - parent_pos);
-					const XMVECTOR axis = XMVector3Normalize(XMVector3Cross(dir_parent_to_ik, dir_parent_to_target));
-					const float angle = XMVectorGetX(XMVectorACos(XMVector3Dot(dir_parent_to_ik, dir_parent_to_target))); // don't use std::acos!
-					XMFLOAT4 quaternion;
-					XMStoreFloat4(&quaternion, XMQuaternionNormalize(XMQuaternionRotationAxis(axis, angle)));
+					XMVECTOR axis = XMVector3Cross(dir_parent_to_ik, dir_parent_to_target);
+					float angle = XMVectorGetX(XMVectorACos(XMVector3Dot(dir_parent_to_ik, dir_parent_to_target))); // don't use std::acos!
+					
+					// Apply any constraint if needed:
+					const ConstraintComponent* constraint = constraints.GetComponent(parent_entity);
+					if (constraint != nullptr)
+					{
+						switch (constraint->type)
+						{
+						default:
+						case ConstraintComponent::HINGE:
+							if (constraint->IsLimitAxis())
+							{
+								axis = XMLoadFloat3(&constraint->axis_world);
+							}
+							if (constraint->IsLimitAngleMin())
+							{
+								angle = std::max(angle, constraint->angle_min);
+							}
+							if (constraint->IsLimitAngleMax())
+							{
+								angle = std::min(angle, constraint->angle_max);
+							}
+							break;
+						case ConstraintComponent::SPHERE:
+							if (constraint->IsLimitAxis())
+							{
+								XMVECTOR sphere_axis = XMLoadFloat3(&constraint->axis_world);
+								float angle2 = XMVectorGetX(XMVectorACos(XMVector3Dot(dir_parent_to_target, sphere_axis))); // don't use std::acos!
+								XMVECTOR axis2 = XMVector3Cross(dir_parent_to_target, sphere_axis);
+								float angle_correction = 0;
+								if (constraint->IsLimitAngleMin() && angle2 < constraint->angle_min * 0.5f)
+								{
+									angle_correction = constraint->angle_min * 0.5f - angle2;
+								}
+								if (constraint->IsLimitAngleMax() && angle2 > constraint->angle_max * 0.5f)
+								{
+									angle_correction = angle2 - constraint->angle_max * 0.5f;
+								}
+								if (angle_correction > 0)
+								{
+									const XMVECTOR Q = XMQuaternionNormalize(XMQuaternionRotationNormal(axis, angle));
+									const XMVECTOR Q_correction = XMQuaternionNormalize(XMQuaternionRotationNormal(axis2, angle_correction));
+									const XMVECTOR Q_limited = XMQuaternionMultiply(Q, Q_correction);
+									XMQuaternionToAxisAngle(&axis, &angle, Q_limited);
+								}
+							}
+							else
+							{
+								if (constraint->IsLimitAngleMin())
+								{
+									angle = std::max(angle, constraint->angle_min);
+								}
+								if (constraint->IsLimitAngleMax())
+								{
+									angle = std::min(angle, constraint->angle_max);
+								}
+							}
+							break;
+						}
+					}
+					
+					const XMVECTOR Q = XMQuaternionNormalize(XMQuaternionRotationNormal(axis, angle));
 
 					// parent to world space:
 					parent_transform->ApplyTransform();
 					// rotate parent:
-					parent_transform->Rotate(quaternion);
+					parent_transform->Rotate(Q);
 					parent_transform->UpdateTransform();
 					// parent back to local space (if parent has parent):
 					const HierarchyComponent* hier_parent = hierarchy.GetComponent(parent_entity);

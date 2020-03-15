@@ -373,6 +373,15 @@ If animations are also playing on the affected entities, the IK system will over
 [[Header]](../WickedEngine/wiScene.h) [[Cpp]](../WickedEngine/wiScene.cpp)
 An entity can have a `SpringComponent` to achieve a "jiggle" or "soft" animation effect programatically. The effect will work automatically if the transform is changed by animation system for example, or in any other way. The parameter `stiffness` specifies how fast the transform tries to go back to its initial position. The parameter `damping` specifies how fast the transform comes to rest position. The `wind_affection` parameter specifies how much the global wind applies to the spring.
 
+#### ConstraintComponent
+[[Header]](../WickedEngine/wiScene.h) [[Cpp]](../WickedEngine/wiScene.cpp)
+Used to limit rotation of transforms in Inverse Kinematics or Spring simulations. The user can choose whether to limit to a fixed axis or limit the rotation angles between min-max. There are different constraint types, such as:
+- `HINGE`: If limited to an axis, the axis will be absolute of which the transform can rotate around. The user should set the `axis_local` in the [TransformComponent](#transformcomponent)'s local space. The angle limitations will be either made around this axis, or the automatically chosen rotation axis<b>*</b>.
+- `SPHERE`: If limited to an axis, this will be an axis of which around the min-max angle limits are computed. The [TransformComponent](#transformcomponent) will still rotate around the automatic rotation axis, but the rotation will be constrained relative to the limit axis. The user should set the `axis_local` in the `TransformComponent`'s local space. This constraint will have no effect if there are no angle limits. If angle limits are specified, but no axis limit is specified, the angle limits will act similarly to a hinge contraint without axis limit, so angles will be limited relative to the automatically chosen rotation axis.
+
+<b>*</b>Remarks:
+- The automatically chosen rotation axis is the axis that is computed by the Inverse Kinematics or Spring system simulations. In other words, it is not a user specified axis.
+
 #### Scene
 [[Header]](../WickedEngine/wiScene.h) [[Cpp]](../WickedEngine/wiScene.cpp)
 A scene is a collection of component arrays. The scene is updating all the components in an efficient manner using the [job system](#wijobsystem). It can be serialized and saved/loaded from disk efficiently.

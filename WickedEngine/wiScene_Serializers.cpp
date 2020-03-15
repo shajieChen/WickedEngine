@@ -822,6 +822,25 @@ namespace wiScene
 			archive << wind_affection;
 		}
 	}
+	void ConstraintComponent::Serialize(wiArchive& archive, uint32_t seed)
+	{
+		if (archive.IsReadMode())
+		{
+			archive >> _flags;
+			archive >> (uint32_t&)type;
+			archive >> axis_local;
+			archive >> angle_min;
+			archive >> angle_max;
+		}
+		else
+		{
+			archive << _flags;
+			archive << (uint32_t)type;
+			archive << axis_local;
+			archive >> angle_min;
+			archive >> angle_max;
+		}
+	}
 
 	void Scene::Serialize(wiArchive& archive)
 	{
@@ -875,6 +894,10 @@ namespace wiScene
 		if (archive.GetVersion() >= 38)
 		{
 			springs.Serialize(archive, seed);
+		}
+		if (archive.GetVersion() >= 39)
+		{
+			constraints.Serialize(archive, seed);
 		}
 
 	}
@@ -1138,6 +1161,16 @@ namespace wiScene
 				if (component_exists)
 				{
 					auto& component = springs.Create(entity);
+					component.Serialize(archive, propagateSeedDeep ? seed : 0);
+				}
+			}
+			if (archive.GetVersion() >= 39)
+			{
+				bool component_exists;
+				archive >> component_exists;
+				if (component_exists)
+				{
+					auto& component = constraints.Create(entity);
 					component.Serialize(archive, propagateSeedDeep ? seed : 0);
 				}
 			}
@@ -1471,9 +1504,22 @@ namespace wiScene
 					archive << false;
 				}
 			}
-			if (archive.GetVersion() >= 37)
+			if (archive.GetVersion() >= 38)
 			{
 				auto component = springs.GetComponent(entity);
+				if (component != nullptr)
+				{
+					archive << true;
+					component->Serialize(archive, seed);
+				}
+				else
+				{
+					archive << false;
+				}
+			}
+			if (archive.GetVersion() >= 39)
+			{
+				auto component = constraints.GetComponent(entity);
 				if (component != nullptr)
 				{
 					archive << true;
